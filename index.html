@@ -703,7 +703,7 @@
 <dialog id="dlgImport">
   <form method="dialog" class="dlg">
     <h3>Import CSV</h3>
-    <div class="muted" style="font-size:12px;">Select <b>rooms.csv</b> and <b>items.csv</b> to replace local data.</div>
+    <div class="muted" style="font-size:12px;">Import <b>rooms.csv</b> + <b>items.csv</b> to replace local data. <b>item_keys.csv</b> is optional (or can be imported alone).</div>
 
     <div class="hr"></div>
     <div class="dlg-grid">
@@ -714,6 +714,10 @@
       <div class="field full">
         <label>items.csv</label>
         <input type="file" id="fileItems" accept=".csv,text/csv" />
+      </div>
+      <div class="field full">
+        <label>item_keys.csv (optional)</label>
+        <input type="file" id="fileItemKeys" accept=".csv,text/csv" />
       </div>
     </div>
 
@@ -730,6 +734,14 @@
   const DEFAULT_ROOMS_URL = "./rooms.csv";
   const DEFAULT_ITEMS_URL = "./items.csv";
   const DEFAULT_ITEM_KEYS_URL = "./item_keys.csv";
+  // Future backend wiring (set later when you have a server).
+  const FUTURE_ROOMS_READ_URL = "";
+  const FUTURE_ITEMS_READ_URL = "";
+  const FUTURE_KEYS_READ_URL = "";
+  const FUTURE_ROOMS_WRITE_URL = "";
+  const FUTURE_ITEMS_WRITE_URL = "";
+  const FUTURE_KEYS_WRITE_URL = "";
+  // Current key-write endpoint (kept for compatibility with existing key panel behavior).
   const ITEM_KEYS_WRITE_URL = "";
   const PLAN_SVG_URL = "./plan.svg";
 
@@ -1004,7 +1016,7 @@
   }
   async function pushSharedItemKeys(){
     if (!ITEM_KEYS_WRITE_URL){
-      setKeysSyncStatus("Push unavailable: configure ITEM_KEYS_WRITE_URL.");
+      setKeysSyncStatus("Push unavailable on static mode. Configure ITEM_KEYS_WRITE_URL for shared writes.");
       return false;
     }
     try{
@@ -1061,6 +1073,8 @@
   const catalogTbody = document.getElementById("catalogTbody");
   const keysTbody = document.getElementById("keysTbody");
   const keysSyncStatus = document.getElementById("keysSyncStatus");
+  const btnPullSharedKeys = document.getElementById("btnPullSharedKeys");
+  const btnPushSharedKeys = document.getElementById("btnPushSharedKeys");
 
   // dialogs
   const dlgItem = document.getElementById("dlgItem");
@@ -1091,6 +1105,7 @@
   const dlgImport = document.getElementById("dlgImport");
   const fileRooms = document.getElementById("fileRooms");
   const fileItems = document.getElementById("fileItems");
+  const fileItemKeys = document.getElementById("fileItemKeys");
   const btnDoImport = document.getElementById("btnDoImport");
 
   const expenseOnly = [
@@ -1132,7 +1147,12 @@
   roomNotes.addEventListener("blur", saveCurrentRoomNotes);
 
   document.getElementById("btnExportCsv").addEventListener("click", exportCSV);
-  document.getElementById("btnImportCsv").addEventListener("click", () => { fileRooms.value=""; fileItems.value=""; dlgImport.showModal(); });
+  document.getElementById("btnImportCsv").addEventListener("click", () => {
+    fileRooms.value = "";
+    fileItems.value = "";
+    if (fileItemKeys) fileItemKeys.value = "";
+    dlgImport.showModal();
+  });
 
   document.getElementById("btnReset").addEventListener("click", () => {
     if (!confirm("Reset local browser data to defaults from CSV?")) return;
@@ -1146,10 +1166,16 @@
     if (!confirm("Reload defaults will overwrite current local rooms/items. Continue?")) return;
     bootstrapFromDefaults();
   });
-  document.getElementById("btnPullSharedKeys").addEventListener("click", () => {
+  if (!ITEM_KEYS_WRITE_URL){
+    btnPushSharedKeys.disabled = true;
+    btnPushSharedKeys.title = "Write endpoint not configured (static read-only mode).";
+    setKeysSyncStatus("Shared mode: use Export/Import CSV to sync browsers for now. Server endpoints can be wired later.");
+  }
+
+  btnPullSharedKeys.addEventListener("click", () => {
     pullSharedItemKeys(true);
   });
-  document.getElementById("btnPushSharedKeys").addEventListener("click", () => {
+  btnPushSharedKeys.addEventListener("click", () => {
     pushSharedItemKeys();
   });
 
@@ -1266,10 +1292,35 @@
 
   btnDoImport.addEventListener("click", async (e) => {
     e.preventDefault();
-    if (!fileRooms.files[0] || !fileItems.files[0]){
-      alert("Please select both rooms.csv and items.csv");
+    const hasRooms = !!fileRooms.files[0];
+    const hasItems = !!fileItems.files[0];
+    const hasKeys = !!(fileItemKeys && fileItemKeys.files[0]);
+
+    // Allow keys-only import for quick cross-browser key sync.
+    if (!hasRooms && !hasItems && hasKeys){
+      try{
+        const keysText = await fileItemKeys.files[0].text();
+        const importedKeys = itemKeysFromCSV(keysText);
+        state.itemKeys = uniqueSortedKeys(importedKeys);
+        ensureItemKeys();
+        saveState();
+        dlgImport.close();
+        render();
+      }catch(err){
+        alert("Import failed: " + err.message);
+      }
       return;
     }
+
+    if (hasRooms !== hasItems){
+      alert("Please select both rooms.csv and items.csv (or only item_keys.csv).");
+      return;
+    }
+    if (!hasRooms && !hasItems && !hasKeys){
+      alert("Please select files to import.");
+      return;
+    }
+
     try{
       const roomsText = await fileRooms.files[0].text();
       const itemsText = await fileItems.files[0].text();
@@ -1282,8 +1333,19 @@
           it.roomId = rooms[0]?.id || "";
         }
       }
+
+      let importedKeys = [];
+      if (hasKeys){
+        const keysText = await fileItemKeys.files[0].text();
+        importedKeys = itemKeysFromCSV(keysText);
+      }
+
       state.rooms = rooms;
       state.items = items;
+      state.itemKeys = uniqueSortedKeys([
+        ...importedKeys,
+        ...items.map(it => it.item_key || "")
+      ]);
       ensureItemKeys();
       state.selectedRoomId = "";
       state.activePanel = "plan";
