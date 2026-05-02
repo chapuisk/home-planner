@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" role="img" aria-label="Flat plan (click rooms)">
+  <defs>
+    <style>
+      /* Background */
+      .bg { fill: #0b1220; }
+      /* Clickable rooms */
+      .hp-room { fill: rgba(106,169,255,0.10); stroke: rgba(106,169,255,0.55); stroke-width: 2; }
+      .hp-room:hover { fill: rgba(106,169,255,0.22); }
+      /* Labels */
+      .lbl { font: 16px sans-serif; fill: rgba(231,239,255,0.95); paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 4px; }
+      .hint { font: 12px sans-serif; fill: rgba(144,164,192,0.95); }
+    </style>
+  </defs>
+
+  <!-- Placeholder plan background. Replace this entire file later with your own accurate SVG. -->
+  <rect class="bg" x="0" y="0" width="1600" height="400"/>
+
+  <text class="hint" x="20" y="28">Placeholder plan.svg — replace later with a traced SVG. Room shapes are clickable by id.</text>
+
+  <!-- SOUTH (left) -->
+  <rect id="kids1" class="hp-room" x="30" y="40" width="230" height="150" rx="14"/>
+  <text class="lbl" x="50" y="80">Kids BR 1</text>
+
+  <rect id="kids2" class="hp-room" x="30" y="210" width="230" height="160" rx="14"/>
+  <text class="lbl" x="50" y="250">Kids BR 2</text>
+
+  <rect id="parents" class="hp-room" x="280" y="210" width="260" height="160" rx="14"/>
+  <text class="lbl" x="300" y="250">Parents</text>
+
+  <!-- Center: stairs + entrance -->
+  <rect id="entrance" class="hp-room" x="560" y="210" width="170" height="110" rx="14"/>
+  <text class="lbl" x="580" y="250">Entrance</text>
+
+  <rect id="cellar" class="hp-room" x="750" y="210" width="170" height="110" rx="14"/>
+  <text class="lbl" x="770" y="250">Cellar</text>
+
+  <rect id="bathroom" class="hp-room" x="560" y="70" width="170" height="120" rx="14"/>
+  <text class="lbl" x="580" y="110">Bathroom</text>
+
+  <rect id="cabinet" class="hp-room" x="750" y="70" width="170" height="120" rx="14"/>
+  <text class="lbl" x="770" y="110">Cabinet</text>
+
+  <!-- Open space -->
+  <rect id="kitchen" class="hp-room" x="950" y="190" width="260" height="180" rx="14"/>
+  <text class="lbl" x="970" y="230">Kitchen</text>
+
+  <rect id="dining" class="hp-room" x="1230" y="190" width="340" height="180" rx="14"/>
+  <text class="lbl" x="1250" y="230">Dining</text>
+
+  <!-- North (right): extension then exterior -->
+  <rect id="extension" class="hp-room" x="950" y="40" width="420" height="130" rx="14"/>
+  <text class="lbl" x="970" y="80">Extension</text>
+
+  <rect id="exterior" class="hp-room" x="1390" y="40" width="180" height="130" rx="14"/>
+  <text class="lbl" x="1410" y="80">Exterior</text>
+</svg>

@@ -1,0 +1,1531 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Home Planner</title>
+  <style>
+    :root{
+      --bg: #0b1220;
+      --muted:#90a4c0;
+      --text:#e7efff;
+      --accent:#6aa9ff;
+      --ok:#2ecc71;
+      --warn:#f1c40f;
+      --bad:#ff5c7a;
+      --border: rgba(255,255,255,.10);
+      --shadow: 0 10px 25px rgba(0,0,0,.35);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background: radial-gradient(1200px 700px at 20% -10%, rgba(106,169,255,.18), transparent 60%),
+                  radial-gradient(900px 600px at 90% 0%, rgba(46,204,113,.12), transparent 55%),
+                  linear-gradient(180deg, #070b14, var(--bg));
+      color: var(--text);
+    }
+    a{ color: var(--accent); }
+    .app{
+      display:grid;
+      grid-template-columns: 360px 1fr;
+      min-height: 100vh;
+    }
+    header{
+      grid-column: 1 / -1;
+      padding: 14px 16px;
+      position: sticky;
+      top:0;
+      z-index: 5;
+      background: rgba(7,11,20,.65);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .title{
+      font-weight: 800;
+      letter-spacing:.2px;
+      margin-right:auto;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .chip{
+      font-size: 12px;
+      padding: 5px 10px;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+    .btn{
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor:pointer;
+      transition: transform .06s ease, background .2s ease;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(255,255,255,.08); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{
+      border-color: rgba(106,169,255,.35);
+      background: rgba(106,169,255,.14);
+    }
+    .btn.danger{
+      border-color: rgba(255,92,122,.35);
+      background: rgba(255,92,122,.10);
+    }
+    .btn.small{ padding: 6px 8px; border-radius: 9px; font-size: 13px; }
+
+    .sidebar{
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      padding: 16px;
+    }
+    .panel{
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .sidebar .panel{ padding: 12px; }
+    .section-title{
+      font-size: 12px;
+      letter-spacing:.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin: 4px 0 10px 0;
+    }
+    .room-list{ display:flex; flex-direction:column; gap: 6px; margin-bottom: 12px; }
+    .room-btn{
+      width:100%;
+      justify-content: space-between;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .room-btn:hover{ background: rgba(255,255,255,.05); }
+    .room-btn.active{
+      background: rgba(106,169,255,.12);
+      border-color: rgba(106,169,255,.25);
+    }
+    .room-meta{ font-size: 12px; color: var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .pill{
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border:1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255,255,255,.02);
+      white-space: nowrap;
+    }
+    .pill.ok{ border-color: rgba(46,204,113,.35); color: rgba(46,204,113,.95); background: rgba(46,204,113,.07); }
+    .pill.bad{ border-color: rgba(255,92,122,.35); color: rgba(255,92,122,.95); background: rgba(255,92,122,.07); }
+    .pill.accent{ border-color: rgba(106,169,255,.35); color: rgba(106,169,255,.95); background: rgba(106,169,255,.07); }
+
+    .filters{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+    }
+    .field{ display:flex; flex-direction:column; gap:6px; margin: 8px 0; }
+    label{ font-size: 12px; color: var(--muted); }
+    input[type="text"], input[type="number"], select, textarea{
+      width:100%;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      outline:none;
+    }
+    textarea{ resize: vertical; min-height: 72px; }
+    .content{ padding: 16px; }
+    .tabs{ display:flex; gap:8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .tab{
+      padding: 8px 10px;
+      border-radius: 999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      cursor:pointer;
+      user-select:none;
+    }
+    .tab.active{
+      border-color: rgba(106,169,255,.35);
+      background: rgba(106,169,255,.14);
+    }
+
+    @media (max-width: 1100px){
+      .app{ grid-template-columns: 1fr; }
+      .sidebar{ border-right:none; border-bottom: 1px solid var(--border); }
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .map-wrap{ padding: 12px; }
+    .map-host{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(0,0,0,.18);
+    }
+    .map-toolbar{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content: space-between;
+      margin: 8px 0 12px 0;
+    }
+    .map-toolbar .left, .map-toolbar .right{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .room-detail{ padding: 12px; }
+    .room-header{
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .room-header h2{ margin:0; font-size: 18px; }
+    .room-header .meta{ color: var(--muted); font-size: 13px; margin-top: 3px; }
+
+    .list-panel{ padding: 12px; }
+    .list-header{
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .list-header h3{
+      margin:0;
+      font-size: 14px;
+      letter-spacing:.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .item{
+      border:1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0,0,0,.12);
+      padding: 10px;
+      margin-top: 8px;
+    }
+    .item.done{
+      opacity: .78;
+      border-color: rgba(46,204,113,.35);
+      background: rgba(46,204,113,.06);
+    }
+    .item-row{
+      display:flex;
+      align-items:flex-start;
+      justify-content: space-between;
+      gap:10px;
+    }
+    .item-title{ font-weight: 650; line-height: 1.2; }
+    .item-notes{
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .item-actions{
+      display:flex;
+      gap:6px;
+      flex-wrap: wrap;
+      align-items:center;
+      justify-content:flex-end;
+      min-width: 170px;
+    }
+
+    .kpi{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px;
+    }
+    .kpi .box{
+      border:1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+      background: rgba(255,255,255,.02);
+    }
+    .kpi .label{ color: var(--muted); font-size: 12px; }
+    .kpi .value{ font-family: var(--mono); font-size: 16px; margin-top: 4px; }
+    .kpi .value strong{ font-size: 20px; }
+
+    table{ width:100%; border-collapse: collapse; font-size: 13px; }
+    th, td{ border-bottom: 1px solid rgba(255,255,255,.08); padding: 10px 8px; vertical-align: top; }
+    th{
+      text-align:left;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing:.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    td.mono{ font-family: var(--mono); }
+    .right{ text-align:right; }
+    .muted{ color: var(--muted); }
+    .footer-note{ color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+    dialog{
+      border:1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(10,16,30,.92);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      width: min(900px, calc(100vw - 24px));
+    }
+    dialog::backdrop{ background: rgba(0,0,0,.55); }
+    .dlg{ padding: 12px; }
+    .dlg h3{ margin: 0 0 6px 0; }
+    .dlg-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .dlg-actions{
+      display:flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .full{ grid-column: 1 / -1; }
+    .hr{ border-top:1px solid rgba(255,255,255,.10); margin:12px 0; }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="header-row">
+    <div class="title">
+      <span style="font-size:18px">Home Planner</span>
+      <span class="chip">GitHub Pages friendly</span>
+      <span class="chip">CSV import/export</span>
+      <span class="chip">EUR</span>
+    </div>
+
+    <button class="btn primary" id="btnAddWork">+ Work</button>
+    <button class="btn primary" id="btnAddExpense">+ Expense</button>
+
+    <button class="btn" id="btnExportCsv">Export CSV</button>
+    <button class="btn" id="btnImportCsv">Import CSV</button>
+
+    <button class="btn danger" id="btnReset">Reset (local)</button>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="panel">
+      <div class="section-title">Rooms</div>
+      <div class="room-list" id="roomList"></div>
+
+      <div class="section-title">Filters</div>
+      <div class="filters">
+        <div class="field">
+          <label for="filterText">Search</label>
+          <input id="filterText" type="text" placeholder="paint, floor, shower..." />
+        </div>
+        <div class="field">
+          <label for="filterDone">Show</label>
+          <select id="filterDone">
+            <option value="all">All</option>
+            <option value="todo">To do</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filterType">Type</label>
+          <select id="filterType">
+            <option value="all">Work + Expense</option>
+            <option value="work">Work only</option>
+            <option value="expense">Expenses only</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filterExpenseCat">Expense category</label>
+          <select id="filterExpenseCat">
+            <option value="all">All</option>
+            <option value="materials">Materials</option>
+            <option value="furniture">Furniture</option>
+            <option value="tools">Tools</option>
+            <option value="service">Service</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        Hosted version loads default <span class="pill">rooms.csv</span> and <span class="pill">items.csv</span>.
+        Your edits are stored in <b>this browser</b> unless you export CSV.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:12px;">
+      <div class="section-title">Totals</div>
+      <div class="kpi">
+        <div class="box">
+          <div class="label">Est. expenses (all)</div>
+          <div class="value"><strong id="kpiEstAll">0</strong> €</div>
+        </div>
+        <div class="box">
+          <div class="label">Actual expenses (all)</div>
+          <div class="value"><strong id="kpiActAll">0</strong> €</div>
+        </div>
+        <div class="box">
+          <div class="label">To do items</div>
+          <div class="value"><strong id="kpiTodo">0</strong></div>
+        </div>
+        <div class="box">
+          <div class="label">Done items</div>
+          <div class="value"><strong id="kpiDone">0</strong></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="tabs">
+      <div class="tab active" data-tab="map">Plan</div>
+      <div class="tab" data-tab="room">Room</div>
+      <div class="tab" data-tab="expenses">All expenses</div>
+      <div class="tab" data-tab="catalog">Catalog (by item_key)</div>
+    </div>
+
+    <section id="tab-map" class="panel map-wrap">
+      <div class="section-title">Plan (click a room)</div>
+
+      <div class="map-toolbar">
+        <div class="left">
+          <span class="pill">SVG: <span class="mono">plan.svg</span></span>
+          <span class="pill">Tip: replace <span class="mono">plan.svg</span> later</span>
+        </div>
+        <div class="right">
+          <button class="btn small" id="btnReloadDefaults">Reload defaults from CSV</button>
+        </div>
+      </div>
+
+      <div class="map-host" id="mapHost">
+        <div class="muted" style="padding:12px;">Loading plan.svg…</div>
+      </div>
+
+      <div class="footer-note">
+        If clicking doesn’t work, your SVG must contain room shapes with ids matching your room ids (e.g. <span class="pill">kitchen</span>).
+      </div>
+    </section>
+
+    <section id="tab-room" class="panel room-detail" style="display:none;">
+      <div class="room-header">
+        <div>
+          <h2 id="roomTitle">Room</h2>
+          <div class="meta" id="roomSubtitle"></div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <span class="pill accent" id="roomPillArea"></span>
+          <span class="pill" id="roomPillCount"></span>
+          <button class="btn small" id="btnEditRoom">Edit room</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <div class="panel list-panel">
+            <div class="list-header">
+              <h3>Work items</h3>
+              <button class="btn small primary" id="btnAddWorkInRoom">+ Add</button>
+            </div>
+            <div id="workList"></div>
+          </div>
+
+          <div class="panel list-panel" style="margin-top:12px;">
+            <div class="list-header">
+              <h3>Expense items</h3>
+              <button class="btn small primary" id="btnAddExpenseInRoom">+ Add</button>
+            </div>
+            <div id="expenseList"></div>
+          </div>
+        </div>
+
+        <div class="panel list-panel">
+          <div class="list-header">
+            <h3>Room totals</h3>
+          </div>
+
+          <div class="kpi" style="grid-template-columns:1fr;">
+            <div class="box">
+              <div class="label">Est. expenses (room)</div>
+              <div class="value"><strong id="kpiEstRoom">0</strong> €</div>
+            </div>
+            <div class="box">
+              <div class="label">Actual expenses (room)</div>
+              <div class="value"><strong id="kpiActRoom">0</strong> €</div>
+            </div>
+
+            <div class="box">
+              <div class="label">Notes</div>
+              <textarea id="roomNotes" placeholder="Constraints, priorities, measurements..."></textarea>
+              <div class="dlg-actions" style="justify-content:flex-start; margin-top:8px;">
+                <button class="btn small" id="btnSaveRoomNotes">Save notes</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-note">
+            Room area + id are in <span class="pill">rooms.csv</span>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-expenses" class="panel list-panel" style="display:none;">
+      <div class="list-header">
+        <div>
+          <h3>All expenses</h3>
+          <div class="muted" style="font-size:12px; margin-top:4px;">
+            Every expense item across rooms (filtered).
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+          <tr>
+            <th>Room</th>
+            <th>item_key</th>
+            <th>Expense</th>
+            <th>Category</th>
+            <th class="right">Est (€)</th>
+            <th class="right">Actual (€)</th>
+            <th>Status</th>
+            <th>Link</th>
+          </tr>
+          </thead>
+          <tbody id="allExpensesTbody"></tbody>
+          <tfoot>
+          <tr>
+            <td colspan="4" class="muted"><b>Totals (filtered)</b></td>
+            <td class="right mono" id="tfootEst">0.00</td>
+            <td class="right mono" id="tfootAct">0.00</td>
+            <td colspan="2"></td>
+          </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-catalog" class="panel list-panel" style="display:none;">
+      <div class="list-header">
+        <div>
+          <h3>Catalog (grouped by item_key)</h3>
+          <div class="muted" style="font-size:12px; margin-top:4px;">
+            Track totals for things like <span class="pill">wood_floor</span> across rooms.
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+          <tr>
+            <th>item_key</th>
+            <th>Lines</th>
+            <th class="right">Est total (€)</th>
+            <th class="right">Actual total (€)</th>
+            <th>Rooms</th>
+          </tr>
+          </thead>
+          <tbody id="catalogTbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Item dialog -->
+<dialog id="dlgItem">
+  <form method="dialog" class="dlg">
+    <h3 id="dlgTitle">Add item</h3>
+    <div class="muted" style="font-size:12px;" id="dlgSubtitle"></div>
+
+    <div class="dlg-grid">
+      <div class="field full">
+        <label for="dlgName">Name</label>
+        <input id="dlgName" type="text" required placeholder="e.g., Wood floor (dining)" />
+      </div>
+
+      <div class="field">
+        <label for="dlgRoom">Room</label>
+        <select id="dlgRoom"></select>
+      </div>
+
+      <div class="field">
+        <label for="dlgKind">Kind</label>
+        <select id="dlgKind">
+          <option value="work">Work item</option>
+          <option value="expense">Expense item</option>
+        </select>
+      </div>
+
+      <div class="field full" id="expenseOnlyKey">
+        <label for="dlgItemKey">Item key (for grouping)</label>
+        <input id="dlgItemKey" type="text" placeholder="e.g., wood_floor, sofa_corner, bathroom_sink_unit" />
+      </div>
+
+      <div class="field" id="expenseOnlyCat">
+        <label for="dlgCategory">Expense category</label>
+        <select id="dlgCategory">
+          <option value="materials">Materials</option>
+          <option value="furniture">Furniture</option>
+          <option value="tools">Tools</option>
+          <option value="service">Service</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="field" id="expenseOnlyEst">
+        <label for="dlgEst">Estimated (€)</label>
+        <input id="dlgEst" type="number" step="0.01" min="0" placeholder="e.g., 1200" />
+      </div>
+
+      <div class="field" id="expenseOnlyAct">
+        <label for="dlgAct">Actual (€)</label>
+        <input id="dlgAct" type="number" step="0.01" min="0" placeholder="e.g., 1189.90" />
+      </div>
+
+      <div class="field full" id="expenseOnlyLink">
+        <label for="dlgLink">Link (optional)</label>
+        <input id="dlgLink" type="text" placeholder="https://..." />
+      </div>
+
+      <div class="field full">
+        <label for="dlgNotes">Notes (optional)</label>
+        <textarea id="dlgNotes" placeholder="Measurements, brands, constraints..."></textarea>
+      </div>
+
+      <div class="field">
+        <label for="dlgDone">Status</label>
+        <select id="dlgDone">
+          <option value="todo">To do</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="muted" style="font-size:12px; padding-top:10px;">
+          Expenses: set Actual when paid.
+        </div>
+      </div>
+    </div>
+
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" id="dlgSave" value="default">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Room dialog -->
+<dialog id="dlgRoomEdit">
+  <form method="dialog" class="dlg">
+    <h3>Edit room</h3>
+    <div class="muted" style="font-size:12px;">This updates data locally; export CSV to persist to repo.</div>
+
+    <div class="dlg-grid">
+      <div class="field full">
+        <label for="dlgRoomName">Name</label>
+        <input id="dlgRoomName" type="text" required />
+      </div>
+
+      <div class="field">
+        <label for="dlgRoomArea">Area (m²)</label>
+        <input id="dlgRoomArea" type="number" step="0.1" min="0" placeholder="e.g., 17" />
+      </div>
+
+      <div class="field">
+        <label for="dlgRoomId">Room ID (stable)</label>
+        <input id="dlgRoomId" type="text" disabled />
+      </div>
+    </div>
+
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" id="dlgRoomSave" value="default">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- CSV Import dialog -->
+<dialog id="dlgImport">
+  <form method="dialog" class="dlg">
+    <h3>Import CSV</h3>
+    <div class="muted" style="font-size:12px;">Select <b>rooms.csv</b> and <b>items.csv</b> to replace local data.</div>
+
+    <div class="hr"></div>
+    <div class="dlg-grid">
+      <div class="field full">
+        <label>rooms.csv</label>
+        <input type="file" id="fileRooms" accept=".csv,text/csv" />
+      </div>
+      <div class="field full">
+        <label>items.csv</label>
+        <input type="file" id="fileItems" accept=".csv,text/csv" />
+      </div>
+    </div>
+
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" id="btnDoImport" value="default">Import</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  const STORAGE_KEY = "home_planner_pages_v1";
+  const DEFAULT_ROOMS_URL = "./rooms.csv";
+  const DEFAULT_ITEMS_URL = "./items.csv";
+  const PLAN_SVG_URL = "./plan.svg";
+
+  const uid = () => crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2);
+  const sum = (arr) => arr.reduce((a,b)=>a+b,0);
+
+  function money(n){
+    const v = Number(n);
+    if (!isFinite(v)) return "0.00";
+    return v.toFixed(2);
+  }
+  function toBool(v){
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    const s = String(v||"").trim().toLowerCase();
+    return (s === "true" || s === "1" || s === "yes" || s === "y" || s === "done");
+  }
+  function normalizeKey(s){
+    return (s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g,"");
+  }
+
+  // CSV (supports quotes)
+  function parseCSV(text){
+    const rows = [];
+    let i = 0, field = "", row = [], inQuotes = false;
+    while (i < text.length){
+      const c = text[i];
+      if (inQuotes){
+        if (c === '"'){
+          if (text[i+1] === '"'){ field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += c; i++; continue;
+      } else {
+        if (c === '"'){ inQuotes = true; i++; continue; }
+        if (c === ','){ row.push(field); field=""; i++; continue; }
+        if (c === '\n'){
+          row.push(field); rows.push(row);
+          field=""; row=[]; i++; continue;
+        }
+        if (c === '\r'){ i++; continue; }
+        field += c; i++; continue;
+      }
+    }
+    row.push(field);
+    if (row.length > 1 || (row.length === 1 && row[0].trim() !== "")) rows.push(row);
+    return rows;
+  }
+  function toCSV(rows){
+    const esc = (v) => {
+      const s = (v === null || v === undefined) ? "" : String(v);
+      if (/[",\n\r]/.test(s)) return '"' + s.replaceAll('"','""') + '"';
+      return s;
+    };
+    return rows.map(r => r.map(esc).join(",")).join("\n") + "\n";
+  }
+  function downloadText(filename, text, mime){
+    const blob = new Blob([text], {type: mime || "text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function indexer(header){
+    const m = new Map();
+    header.forEach((h,i)=>m.set(h, i));
+    return m;
+  }
+  function val(row, idx, key){
+    const i = idx.get(key);
+    if (i === undefined) return "";
+    return (row[i] ?? "").trim();
+  }
+  function numOrNull(v){
+    if (v === "" || v === null || v === undefined) return null;
+    const n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+
+  function roomsFromCSV(text){
+    const rows = parseCSV(text);
+    const header = rows[0].map(h => h.trim());
+    const idx = indexer(header);
+
+    const out = [];
+    for (let i=1;i<rows.length;i++){
+      const r = rows[i];
+      const id = val(r, idx, "room_id");
+      if (!id) continue;
+      out.push({
+        id,
+        name: val(r, idx, "name") || id,
+        area_m2: numOrNull(val(r, idx, "area_m2")),
+        notes: val(r, idx, "notes") || ""
+      });
+    }
+    return out;
+  }
+  function itemsFromCSV(text){
+    const rows = parseCSV(text);
+    const header = rows[0].map(h => h.trim());
+    const idx = indexer(header);
+
+    const out = [];
+    for (let i=1;i<rows.length;i++){
+      const r = rows[i];
+      const kind = val(r, idx, "kind");
+      if (!kind) continue;
+      out.push({
+        id: val(r, idx, "item_id") || uid(),
+        roomId: val(r, idx, "room_id") || "",
+        kind,
+        item_key: val(r, idx, "item_key") || "",
+        name: val(r, idx, "name") || "",
+        done: toBool(val(r, idx, "done")),
+        category: val(r, idx, "category") || "",
+        est: val(r, idx, "est_eur") || "",
+        act: val(r, idx, "act_eur") || "",
+        link: val(r, idx, "link") || "",
+        notes: val(r, idx, "notes") || ""
+      });
+    }
+    return out;
+  }
+
+  function roomsToCSVRows(rooms){
+    const header = ["room_id","name","area_m2","notes"];
+    const rows = [header];
+    for (const r of rooms){
+      rows.push([r.id, r.name, r.area_m2 ?? "", r.notes ?? ""]);
+    }
+    return rows;
+  }
+  function itemsToCSVRows(items){
+    const header = ["item_id","room_id","kind","item_key","name","done","category","est_eur","act_eur","link","notes"];
+    const rows = [header];
+    for (const it of items){
+      rows.push([
+        it.id, it.roomId, it.kind, it.item_key ?? "", it.name ?? "",
+        toBool(it.done) ? "1" : "0",
+        it.category ?? "", it.est ?? "", it.act ?? "", it.link ?? "", it.notes ?? ""
+      ]);
+    }
+    return rows;
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function escapeAttr(s){
+    return escapeHtml(s).replaceAll("`","&#096;");
+  }
+
+  // state
+  let state = loadState();
+  function loadState(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw){
+      return {
+        version: 1,
+        currency: "EUR",
+        activeTab: "map",
+        selectedRoomId: "",
+        filters: { text:"", done:"all", type:"all", expenseCat:"all" },
+        rooms: [],
+        items: []
+      };
+    }
+    try{
+      const st = JSON.parse(raw);
+      if (!st || typeof st !== "object") throw new Error();
+      return st;
+    }catch{
+      localStorage.removeItem(STORAGE_KEY);
+      return loadState();
+    }
+  }
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  // DOM refs
+  const elRoomList = document.getElementById("roomList");
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+  const elTabMap = document.getElementById("tab-map");
+  const elTabRoom = document.getElementById("tab-room");
+  const elTabExpenses = document.getElementById("tab-expenses");
+  const elTabCatalog = document.getElementById("tab-catalog");
+
+  const filterText = document.getElementById("filterText");
+  const filterDone = document.getElementById("filterDone");
+  const filterType = document.getElementById("filterType");
+  const filterExpenseCat = document.getElementById("filterExpenseCat");
+
+  const kpiEstAll = document.getElementById("kpiEstAll");
+  const kpiActAll = document.getElementById("kpiActAll");
+  const kpiTodo = document.getElementById("kpiTodo");
+  const kpiDone = document.getElementById("kpiDone");
+
+  const mapHost = document.getElementById("mapHost");
+
+  const roomTitle = document.getElementById("roomTitle");
+  const roomSubtitle = document.getElementById("roomSubtitle");
+  const roomPillArea = document.getElementById("roomPillArea");
+  const roomPillCount = document.getElementById("roomPillCount");
+  const workList = document.getElementById("workList");
+  const expenseList = document.getElementById("expenseList");
+  const roomNotes = document.getElementById("roomNotes");
+  const btnSaveRoomNotes = document.getElementById("btnSaveRoomNotes");
+  const kpiEstRoom = document.getElementById("kpiEstRoom");
+  const kpiActRoom = document.getElementById("kpiActRoom");
+
+  const allExpensesTbody = document.getElementById("allExpensesTbody");
+  const tfootEst = document.getElementById("tfootEst");
+  const tfootAct = document.getElementById("tfootAct");
+  const catalogTbody = document.getElementById("catalogTbody");
+
+  // dialogs
+  const dlgItem = document.getElementById("dlgItem");
+  const dlgTitle = document.getElementById("dlgTitle");
+  const dlgSubtitle = document.getElementById("dlgSubtitle");
+  const dlgName = document.getElementById("dlgName");
+  const dlgRoom = document.getElementById("dlgRoom");
+  const dlgKind = document.getElementById("dlgKind");
+  const dlgItemKey = document.getElementById("dlgItemKey");
+  const dlgCategory = document.getElementById("dlgCategory");
+  const dlgEst = document.getElementById("dlgEst");
+  const dlgAct = document.getElementById("dlgAct");
+  const dlgLink = document.getElementById("dlgLink");
+  const dlgNotes = document.getElementById("dlgNotes");
+  const dlgDone = document.getElementById("dlgDone");
+  const dlgSave = document.getElementById("dlgSave");
+
+  const dlgRoomEdit = document.getElementById("dlgRoomEdit");
+  const dlgRoomName = document.getElementById("dlgRoomName");
+  const dlgRoomArea = document.getElementById("dlgRoomArea");
+  const dlgRoomId = document.getElementById("dlgRoomId");
+  const dlgRoomSave = document.getElementById("dlgRoomSave");
+
+  const dlgImport = document.getElementById("dlgImport");
+  const fileRooms = document.getElementById("fileRooms");
+  const fileItems = document.getElementById("fileItems");
+  const btnDoImport = document.getElementById("btnDoImport");
+
+  const expenseOnly = [
+    document.getElementById("expenseOnlyKey"),
+    document.getElementById("expenseOnlyCat"),
+    document.getElementById("expenseOnlyEst"),
+    document.getElementById("expenseOnlyAct"),
+    document.getElementById("expenseOnlyLink"),
+  ];
+
+  // event wiring
+  document.getElementById("btnAddWork").addEventListener("click", () => openAddDialog("work", state.selectedRoomId));
+  document.getElementById("btnAddExpense").addEventListener("click", () => openAddDialog("expense", state.selectedRoomId));
+  document.getElementById("btnAddWorkInRoom").addEventListener("click", () => openAddDialog("work", state.selectedRoomId));
+  document.getElementById("btnAddExpenseInRoom").addEventListener("click", () => openAddDialog("expense", state.selectedRoomId));
+
+  document.getElementById("btnEditRoom").addEventListener("click", () => openRoomDialog(state.selectedRoomId));
+  btnSaveRoomNotes.addEventListener("click", () => {
+    const r = getRoom(state.selectedRoomId);
+    r.notes = roomNotes.value ?? "";
+    saveState(); render();
+  });
+
+  document.getElementById("btnExportCsv").addEventListener("click", exportCSV);
+  document.getElementById("btnImportCsv").addEventListener("click", () => { fileRooms.value=""; fileItems.value=""; dlgImport.showModal(); });
+
+  document.getElementById("btnReset").addEventListener("click", () => {
+    if (!confirm("Reset local browser data to defaults from CSV?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    state = loadState();
+    bootstrapFromDefaults();
+  });
+
+  document.getElementById("btnReloadDefaults").addEventListener("click", bootstrapFromDefaults);
+
+  [filterText, filterDone, filterType, filterExpenseCat].forEach(el => {
+    el.addEventListener("input", () => {
+      state.filters.text = filterText.value;
+      state.filters.done = filterDone.value;
+      state.filters.type = filterType.value;
+      state.filters.expenseCat = filterExpenseCat.value;
+      saveState(); render();
+    });
+  });
+
+  tabs.forEach(t => t.addEventListener("click", () => {
+    state.activeTab = t.dataset.tab;
+    saveState(); render();
+  }));
+
+  dlgKind.addEventListener("change", updateExpenseFieldsVisibility);
+
+  let editingItemId = null;
+  dlgSave.addEventListener("click", (e) => {
+    e.preventDefault();
+    const name = (dlgName.value || "").trim();
+    if (!name){ alert("Name is required."); return; }
+
+    const kind = dlgKind.value;
+    let key = (dlgItemKey.value || "").trim();
+    if (kind === "expense" && !key) key = normalizeKey(name);
+    if (kind !== "expense") key = "";
+
+    const newItem = {
+      id: editingItemId || uid(),
+      roomId: dlgRoom.value,
+      kind,
+      item_key: key,
+      name,
+      done: dlgDone.value === "done",
+      notes: dlgNotes.value || "",
+      category: kind === "expense" ? (dlgCategory.value || "other") : "",
+      est: kind === "expense" ? (dlgEst.value === "" ? "" : Number(dlgEst.value)) : "",
+      act: kind === "expense" ? (dlgAct.value === "" ? "" : Number(dlgAct.value)) : "",
+      link: dlgLink.value || ""
+    };
+
+    if (editingItemId){
+      const idx = state.items.findIndex(i => i.id === editingItemId);
+      if (idx >= 0) state.items[idx] = newItem;
+    } else {
+      state.items.unshift(newItem);
+    }
+
+    state.selectedRoomId = newItem.roomId;
+    saveState();
+    dlgItem.close();
+    setActiveTab("room");
+  });
+
+  dlgRoomSave.addEventListener("click", (e) => {
+    e.preventDefault();
+    const r = getRoom(state.selectedRoomId);
+    const nm = (dlgRoomName.value || "").trim();
+    if (!nm){ alert("Room name is required."); return; }
+    r.name = nm;
+    r.area_m2 = (dlgRoomArea.value === "" ? null : Number(dlgRoomArea.value));
+    saveState();
+    dlgRoomEdit.close();
+    render();
+  });
+
+  btnDoImport.addEventListener("click", async (e) => {
+    e.preventDefault();
+    if (!fileRooms.files[0] || !fileItems.files[0]){
+      alert("Please select both rooms.csv and items.csv");
+      return;
+    }
+    try{
+      const roomsText = await fileRooms.files[0].text();
+      const itemsText = await fileItems.files[0].text();
+      const rooms = roomsFromCSV(roomsText);
+      const items = itemsFromCSV(itemsText);
+
+      const roomIds = new Set(rooms.map(r => r.id));
+      for (const it of items){
+        if (!roomIds.has(it.roomId)){
+          it.roomId = rooms[0]?.id || "";
+        }
+      }
+      state.rooms = rooms;
+      state.items = items;
+      state.selectedRoomId = rooms[0]?.id || "";
+      state.activeTab = "map";
+      saveState();
+      dlgImport.close();
+      render();
+    }catch(err){
+      alert("Import failed: " + err.message);
+    }
+  });
+
+  function setActiveTab(tab){
+    state.activeTab = tab;
+    saveState(); render();
+  }
+
+  function getRoom(roomId){
+    return state.rooms.find(r => r.id === roomId) || state.rooms[0] || {id:"",name:"(none)"};
+  }
+
+  function itemMatchesFilters(item){
+    const f = state.filters;
+    if (f.type !== "all" && item.kind !== f.type) return false;
+    if (f.done === "todo" && toBool(item.done)) return false;
+    if (f.done === "done" && !toBool(item.done)) return false;
+
+    const q = (f.text || "").trim().toLowerCase();
+    if (q){
+      const hay = (item.name + " " + (item.notes||"") + " " + (item.link||"") + " " + (item.item_key||"")).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (item.kind === "expense"){
+      const cat = (item.category || "other");
+      if (f.expenseCat !== "all" && cat !== f.expenseCat) return false;
+    }
+    return true;
+  }
+
+  function roomCounts(roomId){
+    const items = state.items.filter(i => i.roomId === roomId);
+    const todo = items.filter(i => !toBool(i.done)).length;
+    const done = items.filter(i => toBool(i.done)).length;
+    return {todo, done, total: items.length};
+  }
+  function roomExpenseTotals(roomId){
+    const exp = state.items.filter(i => i.roomId === roomId && i.kind === "expense");
+    const est = sum(exp.map(e => Number(e.est) || 0));
+    const act = sum(exp.map(e => Number(e.act) || 0));
+    return {est, act};
+  }
+  function overallTotals(){
+    const exp = state.items.filter(i => i.kind === "expense");
+    const est = sum(exp.map(e => Number(e.est) || 0));
+    const act = sum(exp.map(e => Number(e.act) || 0));
+    const todo = state.items.filter(i => !toBool(i.done)).length;
+    const done = state.items.filter(i => toBool(i.done)).length;
+    return {est, act, todo, done};
+  }
+
+  function render(){
+    // sidebar rooms
+    elRoomList.innerHTML = "";
+    state.rooms.forEach(r => {
+      const counts = roomCounts(r.id);
+      const {est, act} = roomExpenseTotals(r.id);
+
+      const btn = document.createElement("button");
+      btn.className = "room-btn" + (r.id === state.selectedRoomId ? " active" : "");
+      btn.addEventListener("click", () => {
+        state.selectedRoomId = r.id;
+        saveState(); render();
+      });
+
+      const left = document.createElement("div");
+      left.style.display="flex";
+      left.style.flexDirection="column";
+      left.style.gap="2px";
+      left.innerHTML = `
+        <div>${escapeHtml(r.name)}</div>
+        <div class="room-meta">
+          <span class="pill">${counts.todo} todo</span>
+          <span class="pill ok">${counts.done} done</span>
+          ${r.area_m2 ? `<span class="pill">${escapeHtml(r.area_m2)} m²</span>` : ""}
+        </div>
+      `;
+
+      const right = document.createElement("div");
+      right.style.display="flex";
+      right.style.flexDirection="column";
+      right.style.alignItems="flex-end";
+      right.style.gap="4px";
+      right.innerHTML = `
+        <span class="pill accent">Est ${money(est)}€</span>
+        <span class="pill">Act ${money(act)}€</span>
+      `;
+
+      btn.appendChild(left);
+      btn.appendChild(right);
+      elRoomList.appendChild(btn);
+    });
+
+    // KPIs
+    const ov = overallTotals();
+    kpiEstAll.textContent = money(ov.est);
+    kpiActAll.textContent = money(ov.act);
+    kpiTodo.textContent = ov.todo;
+    kpiDone.textContent = ov.done;
+
+    // tabs
+    tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === state.activeTab));
+    elTabMap.style.display = state.activeTab === "map" ? "" : "none";
+    elTabRoom.style.display = state.activeTab === "room" ? "" : "none";
+    elTabExpenses.style.display = state.activeTab === "expenses" ? "" : "none";
+    elTabCatalog.style.display = state.activeTab === "catalog" ? "" : "none";
+
+    renderRoomDetails();
+    renderAllExpenses();
+    renderCatalog();
+    highlightRoomInSvg(state.selectedRoomId);
+  }
+
+  function renderRoomDetails(){
+    if (!state.selectedRoomId){
+      roomTitle.textContent = "(Select a room)";
+      roomSubtitle.textContent = "";
+      roomPillArea.textContent = "";
+      roomPillCount.textContent = "";
+      workList.innerHTML = `<div class="muted">Select a room from the Plan.</div>`;
+      expenseList.innerHTML = "";
+      return;
+    }
+
+    const r = getRoom(state.selectedRoomId);
+    roomTitle.textContent = r.name;
+    roomSubtitle.textContent = "Room ID: " + r.id;
+    roomPillArea.textContent = r.area_m2 ? `${r.area_m2} m²` : "area: (not set)";
+    const counts = roomCounts(r.id);
+    roomPillCount.textContent = `${counts.total} items`;
+    roomNotes.value = r.notes || "";
+
+    const {est, act} = roomExpenseTotals(r.id);
+    kpiEstRoom.textContent = money(est);
+    kpiActRoom.textContent = money(act);
+
+    const items = state.items.filter(i => i.roomId === r.id && itemMatchesFilters(i));
+    const works = items.filter(i => i.kind === "work");
+    const expenses = items.filter(i => i.kind === "expense");
+
+    workList.innerHTML = works.length ? "" : `<div class="muted">No work items match current filters.</div>`;
+    works.forEach(i => workList.appendChild(renderItem(i)));
+
+    expenseList.innerHTML = expenses.length ? "" : `<div class="muted">No expense items match current filters.</div>`;
+    expenses.forEach(i => expenseList.appendChild(renderItem(i)));
+  }
+
+  function renderItem(item){
+    const div = document.createElement("div");
+    const done = toBool(item.done);
+    div.className = "item" + (done ? " done" : "");
+    const room = getRoom(item.roomId);
+
+    let rightBlock = "";
+    if (item.kind === "expense"){
+      rightBlock = `
+        <div class="muted" style="font-size:12px; text-align:right;">
+          <div class="mono">Est: ${money(item.est||0)} €</div>
+          <div class="mono">Act: ${money(item.act||0)} €</div>
+          <div style="margin-top:4px; display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+            <span class="pill">${escapeHtml(item.category || "other")}</span>
+            <span class="pill">${escapeHtml(item.item_key || "(no key)")}</span>
+          </div>
+        </div>
+      `;
+    } else {
+      rightBlock = `<div class="muted" style="font-size:12px; text-align:right;">Work</div>`;
+    }
+
+    div.innerHTML = `
+      <div class="item-row">
+        <div style="min-width:0;">
+          <div class="item-title">${escapeHtml(item.name)}</div>
+          <div class="muted" style="font-size:12px; margin-top:4px;">
+            <span class="pill">${escapeHtml(room.name)}</span>
+            <span class="pill ${done ? "ok":"bad"}">${done ? "done":"todo"}</span>
+            <span class="pill">${escapeHtml(item.kind)}</span>
+          </div>
+          ${item.link ? `<div style="margin-top:6px; font-size:12px;"><a href="${escapeAttr(item.link)}" target="_blank" rel="noreferrer">Open link</a></div>` : ""}
+          ${item.notes ? `<div class="item-notes">${escapeHtml(item.notes)}</div>` : ""}
+        </div>
+        <div class="item-actions">
+          ${rightBlock}
+          <button class="btn small" data-act="toggle">${done ? "Mark to do" : "Mark done"}</button>
+          <button class="btn small" data-act="edit">Edit</button>
+          <button class="btn small danger" data-act="del">Delete</button>
+        </div>
+      </div>
+    `;
+
+    div.querySelector('[data-act="toggle"]').addEventListener("click", () => {
+      item.done = !done;
+      saveState(); render();
+    });
+    div.querySelector('[data-act="edit"]').addEventListener("click", () => openEditDialog(item.id));
+    div.querySelector('[data-act="del"]').addEventListener("click", () => {
+      if (!confirm("Delete this item?")) return;
+      state.items = state.items.filter(x => x.id !== item.id);
+      saveState(); render();
+    });
+
+    return div;
+  }
+
+  function renderAllExpenses(){
+    const exp = state.items.filter(i => i.kind === "expense" && itemMatchesFilters(i));
+    allExpensesTbody.innerHTML = "";
+    exp.forEach(e => {
+      const r = getRoom(e.roomId);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(r.name)}</td>
+        <td class="mono">${escapeHtml(e.item_key || "")}</td>
+        <td>
+          <div style="font-weight:650;">${escapeHtml(e.name)}</div>
+          ${e.notes ? `<div class="muted" style="margin-top:4px; white-space:pre-wrap;">${escapeHtml(e.notes)}</div>` : ""}
+        </td>
+        <td><span class="pill">${escapeHtml(e.category || "other")}</span></td>
+        <td class="right mono">${money(e.est || 0)}</td>
+        <td class="right mono">${money(e.act || 0)}</td>
+        <td><span class="pill ${toBool(e.done) ? "ok":"bad"}">${toBool(e.done) ? "done":"todo"}</span></td>
+        <td>${e.link ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noreferrer">link</a>` : `<span class="muted">—</span>`}</td>
+      `;
+      allExpensesTbody.appendChild(tr);
+    });
+
+    const est = sum(exp.map(e => Number(e.est) || 0));
+    const act = sum(exp.map(e => Number(e.act) || 0));
+    tfootEst.textContent = money(est);
+    tfootAct.textContent = money(act);
+  }
+
+  function renderCatalog(){
+    const exp = state.items.filter(i => i.kind === "expense" && itemMatchesFilters(i));
+    const map = new Map();
+    for (const e of exp){
+      const key = (e.item_key || "").trim() || "(no_key)";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(e);
+    }
+    const keys = Array.from(map.keys()).sort((a,b)=>a.localeCompare(b));
+    catalogTbody.innerHTML = "";
+    for (const k of keys){
+      const lines = map.get(k);
+      const est = sum(lines.map(x => Number(x.est) || 0));
+      const act = sum(lines.map(x => Number(x.act) || 0));
+      const rooms = Array.from(new Set(lines.map(x => getRoom(x.roomId).name))).sort((a,b)=>a.localeCompare(b));
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">${escapeHtml(k)}</td>
+        <td class="mono">${lines.length}</td>
+        <td class="right mono">${money(est)}</td>
+        <td class="right mono">${money(act)}</td>
+        <td class="muted">${escapeHtml(rooms.join(", "))}</td>
+      `;
+      catalogTbody.appendChild(tr);
+    }
+  }
+
+  function populateRoomSelect(selectedId){
+    dlgRoom.innerHTML = "";
+    state.rooms.forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = r.id;
+      opt.textContent = r.name;
+      if (r.id === selectedId) opt.selected = true;
+      dlgRoom.appendChild(opt);
+    });
+  }
+  function updateExpenseFieldsVisibility(){
+    const isExpense = dlgKind.value === "expense";
+    expenseOnly.forEach(el => el.style.display = isExpense ? "" : "none");
+  }
+  function openAddDialog(kind, roomId){
+    editingItemId = null;
+    dlgTitle.textContent = kind === "work" ? "Add work item" : "Add expense item";
+    dlgSubtitle.textContent = "Tip: item_key groups same expense across rooms (wood_floor, storage...).";
+    dlgName.value = "";
+    dlgNotes.value = "";
+    dlgLink.value = "";
+    dlgDone.value = "todo";
+    dlgKind.value = kind;
+
+    dlgEst.value = "";
+    dlgAct.value = "";
+    dlgCategory.value = "materials";
+    dlgItemKey.value = "";
+
+    populateRoomSelect(roomId || state.rooms[0]?.id || "");
+    updateExpenseFieldsVisibility();
+    dlgItem.showModal();
+  }
+  function openEditDialog(itemId){
+    const item = state.items.find(i => i.id === itemId);
+    if (!item) return;
+    editingItemId = itemId;
+
+    dlgTitle.textContent = "Edit item";
+    dlgSubtitle.textContent = "Keep item_key stable for good reporting.";
+
+    dlgName.value = item.name || "";
+    dlgNotes.value = item.notes || "";
+    dlgLink.value = item.link || "";
+    dlgDone.value = toBool(item.done) ? "done" : "todo";
+    dlgKind.value = item.kind;
+
+    dlgEst.value = item.est ?? "";
+    dlgAct.value = item.act ?? "";
+    dlgCategory.value = item.category || "other";
+    dlgItemKey.value = item.item_key || "";
+
+    populateRoomSelect(item.roomId);
+    updateExpenseFieldsVisibility();
+    dlgItem.showModal();
+  }
+
+  function openRoomDialog(roomId){
+    const r = getRoom(roomId);
+    dlgRoomId.value = r.id;
+    dlgRoomName.value = r.name;
+    dlgRoomArea.value = r.area_m2 ?? "";
+    dlgRoomEdit.showModal();
+  }
+
+  function exportCSV(){
+    downloadText("rooms.csv", toCSV(roomsToCSVRows(state.rooms)), "text/csv");
+    downloadText("items.csv", toCSV(itemsToCSVRows(state.items)), "text/csv");
+  }
+
+  async function bootstrapFromDefaults(){
+    try{
+      const [roomsText, itemsText] = await Promise.all([
+        fetch(DEFAULT_ROOMS_URL, {cache:"no-store"}).then(r => r.text()),
+        fetch(DEFAULT_ITEMS_URL, {cache:"no-store"}).then(r => r.text()),
+      ]);
+      state.rooms = roomsFromCSV(roomsText);
+      state.items = itemsFromCSV(itemsText);
+      state.selectedRoomId = state.rooms[0]?.id || "";
+      state.activeTab = "map";
+      saveState();
+      await loadAndAttachPlanSvg();
+      render();
+    }catch(err){
+      mapHost.innerHTML = `<div style="padding:12px" class="muted">Failed to load default CSV or plan.svg. Error: ${escapeHtml(err.message)}</div>`;
+      render();
+    }
+  }
+
+  async function loadAndAttachPlanSvg(){
+    // Load plan.svg and insert into DOM so click events work
+    const svgText = await fetch(PLAN_SVG_URL, {cache:"no-store"}).then(r => {
+      if (!r.ok) throw new Error("Could not load plan.svg (" + r.status + ")");
+      return r.text();
+    });
+    mapHost.innerHTML = svgText;
+
+    // Click handling: any element with an id that matches a room_id should be clickable
+    const svgEl = mapHost.querySelector("svg");
+    if (!svgEl) return;
+
+    svgEl.querySelectorAll("[id]").forEach(el => {
+      const id = el.getAttribute("id");
+      if (!id) return;
+      if (!state.rooms.some(r => r.id === id)) return;
+
+      el.style.cursor = "pointer";
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        state.selectedRoomId = id;
+        state.activeTab = "room";
+        saveState();
+        render();
+      });
+    });
+
+    // Make it responsive
+    svgEl.removeAttribute("width");
+    svgEl.removeAttribute("height");
+    svgEl.style.width = "100%";
+    svgEl.style.height = "auto";
+    svgEl.style.display = "block";
+  }
+
+  function highlightRoomInSvg(roomId){
+    const svgEl = mapHost.querySelector("svg");
+    if (!svgEl) return;
+
+    // Remove previous highlight style
+    svgEl.querySelectorAll(".hp-active").forEach(el => el.classList.remove("hp-active"));
+
+    if (!roomId) return;
+    const el = svgEl.querySelector("#" + CSS.escape(roomId));
+    if (!el) return;
+    el.classList.add("hp-active");
+
+    // Apply highlight style via inline CSS once
+    let style = svgEl.querySelector("style[data-hp]");
+    if (!style){
+      style = document.createElement("style");
+      style.setAttribute("data-hp","1");
+      style.textContent = `
+        .hp-room { fill: rgba(106,169,255,0.10); stroke: rgba(106,169,255,0.55); stroke-width: 2; }
+        .hp-room:hover { fill: rgba(106,169,255,0.22); }
+        .hp-active { fill: rgba(106,169,255,0.32) !important; stroke: rgba(106,169,255,0.95) !important; stroke-width: 3 !important; }
+      `;
+      svgEl.insertBefore(style, svgEl.firstChild);
+    }
+  }
+
+  // Initialize filters from state
+  filterText.value = state.filters.text || "";
+  filterDone.value = state.filters.done || "all";
+  filterType.value = state.filters.type || "all";
+  filterExpenseCat.value = state.filters.expenseCat || "all";
+
+  // First load:
+  // If no rooms yet, fetch defaults from CSV; otherwise just load plan.svg and render.
+  (async () => {
+    if (!state.rooms || state.rooms.length === 0){
+      await bootstrapFromDefaults();
+    } else {
+      try{ await loadAndAttachPlanSvg(); } catch {}
+      render();
+    }
+  })();
+</script>
+</body>
+</html>

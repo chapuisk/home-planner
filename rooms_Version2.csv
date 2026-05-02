@@ -1,0 +1,12 @@
+room_id,name,area_m2,notes
+exterior,Exterior (garden),,"~6m x 4m"
+extension,Extension,17,
+kitchen,Kitchen,8,"Open space with dining room"
+dining,Dining room,20,"Open space with kitchen"
+cabinet,Cabinet,,
+bathroom,Bathroom,5,
+cellar,Cellar,,
+parents,Parental bedroom,,
+kids1,Kids bedroom 1 (downstairs),,
+kids2,Kids bedroom 2 (upstairs),,"Linked via stairs near entrance (not drawn in placeholder SVG)"
+entrance,Entrance,,
