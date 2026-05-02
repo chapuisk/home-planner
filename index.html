@@ -187,6 +187,11 @@
       top: var(--header-h);
       z-index: 4;
     }
+    #roomPanel{
+      position: sticky;
+      top: calc(var(--header-h) + var(--top-panel-h, 0px));
+      z-index: 3;
+    }
     .map-wrap{ padding: 12px; }
     .map-host{
       border:1px solid rgba(255,255,255,.08);
@@ -1073,7 +1078,7 @@
       }
       state.rooms = rooms;
       state.items = items;
-      state.selectedRoomId = rooms[0]?.id || "";
+      state.selectedRoomId = "";
       state.activePanel = "plan";
       saveState();
       dlgImport.close();
@@ -1201,6 +1206,12 @@
     renderCatalog();
     highlightRoomInSvg(state.selectedRoomId);
   }
+
+  // Keep --top-panel-h in sync with the rendered height of #topPanel
+  const _topPanelEl = document.getElementById("topPanel");
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--top-panel-h", _topPanelEl.offsetHeight + "px");
+  }).observe(_topPanelEl);
 
   function renderRoomDetails(){
     if (!state.selectedRoomId){
@@ -1428,7 +1439,7 @@
       ]);
       state.rooms = roomsFromCSV(roomsText);
       state.items = itemsFromCSV(itemsText);
-      state.selectedRoomId = state.rooms[0]?.id || "";
+      state.selectedRoomId = "";
       state.activePanel = "plan";
       saveState();
       await loadAndAttachPlanSvg();
