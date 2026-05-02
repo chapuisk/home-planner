@@ -97,6 +97,11 @@
       border-right: 1px solid var(--border);
       background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
       padding: 16px;
+      position: sticky;
+      top: var(--header-h);
+      max-height: calc(100vh - var(--header-h));
+      overflow: auto;
+      align-self: start;
     }
     .panel{
       background: rgba(255,255,255,.03);
