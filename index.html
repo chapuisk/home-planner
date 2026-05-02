@@ -182,7 +182,7 @@
       .grid{ grid-template-columns: 1fr; }
     }
 
-    #tab-map{
+    #topPanel{
       position: sticky;
       top: var(--header-h);
       z-index: 4;
@@ -339,9 +339,7 @@
   <div class="header-row">
     <div class="title">
       <span style="font-size:18px">Home Planner</span>
-      <span class="chip">GitHub Pages friendly</span>
-      <span class="chip">CSV import/export</span>
-      <span class="chip">EUR</span>
+      <span class="chip">🚧 T'as vu 🚧</span>
     </div>
 
     <button class="btn primary" id="btnAddWork">+ Work</button>
@@ -425,35 +423,71 @@
   </aside>
 
   <main class="content">
-    <section id="tab-map" class="panel map-wrap">
-      <div class="section-title">Plan (click a room)</div>
-
-      <div class="map-toolbar">
-        <div class="left">
-          <span class="pill">SVG: <span class="mono">plan.svg</span></span>
-          <span class="pill">Tip: replace <span class="mono">plan.svg</span> later</span>
+    <!-- Sticky top panel: Plan / Expenses / Catalog -->
+    <div id="topPanel" class="panel map-wrap">
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <div class="tab active" data-panel="plan">Plan</div>
+        <div class="tab" data-panel="expenses">Expenses</div>
+        <div class="tab" data-panel="catalog">Catalog</div>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <span id="roomFilterBadge" class="pill accent" style="display:none; cursor:pointer; user-select:none;" title="Clear room filter"></span>
+          <button class="btn small" id="btnReloadDefaults">Reload defaults</button>
         </div>
-        <div class="right">
-          <button class="btn small" id="btnReloadDefaults">Reload defaults from CSV</button>
+      </div>
+
+      <div id="view-plan">
+        <div class="map-host" id="mapHost">
+          <div class="muted" style="padding:12px;">Loading plan.svg…</div>
+        </div>
+        <div class="footer-note">
+          Click a room to select it — click again to deselect. SVG shapes must use room ids as element ids (e.g. <span class="pill">kitchen</span>).
         </div>
       </div>
 
-      <div class="map-host" id="mapHost">
-        <div class="muted" style="padding:12px;">Loading plan.svg…</div>
+      <div id="view-expenses" style="display:none; overflow:auto; max-height:52vh;">
+        <table>
+          <thead>
+          <tr>
+            <th>Room</th>
+            <th>item_key</th>
+            <th>Expense</th>
+            <th>Category</th>
+            <th class="right">Est (€)</th>
+            <th class="right">Actual (€)</th>
+            <th>Status</th>
+            <th>Link</th>
+          </tr>
+          </thead>
+          <tbody id="allExpensesTbody"></tbody>
+          <tfoot>
+          <tr>
+            <td colspan="4" class="muted"><b>Totals (filtered)</b></td>
+            <td class="right mono" id="tfootEst">0.00</td>
+            <td class="right mono" id="tfootAct">0.00</td>
+            <td colspan="2"></td>
+          </tr>
+          </tfoot>
+        </table>
       </div>
 
-      <div class="footer-note">
-        If clicking doesn’t work, your SVG must contain room shapes with ids matching your room ids (e.g. <span class="pill">kitchen</span>).
+      <div id="view-catalog" style="display:none; overflow:auto; max-height:52vh;">
+        <table>
+          <thead>
+          <tr>
+            <th>item_key</th>
+            <th>Lines</th>
+            <th class="right">Est total (€)</th>
+            <th class="right">Actual total (€)</th>
+            <th>Rooms</th>
+          </tr>
+          </thead>
+          <tbody id="catalogTbody"></tbody>
+        </table>
       </div>
-    </section>
-
-    <div class="tabs">
-      <div class="tab active" data-tab="room">Room</div>
-      <div class="tab" data-tab="expenses">All expenses</div>
-      <div class="tab" data-tab="catalog">Catalog (by item_key)</div>
     </div>
 
-    <section id="tab-room" class="panel room-detail" style="display:none;">
+    <!-- Room detail panel (always visible) -->
+    <section id="roomPanel" class="panel room-detail" style="margin-top:12px;">
       <div class="room-header">
         <div>
           <h2 id="roomTitle">Room</h2>
@@ -513,69 +547,6 @@
             Room area + id are in <span class="pill">rooms.csv</span>.
           </div>
         </div>
-      </div>
-    </section>
-
-    <section id="tab-expenses" class="panel list-panel" style="display:none;">
-      <div class="list-header">
-        <div>
-          <h3>All expenses</h3>
-          <div class="muted" style="font-size:12px; margin-top:4px;">
-            Every expense item across rooms (filtered).
-          </div>
-        </div>
-      </div>
-
-      <div style="overflow:auto;">
-        <table>
-          <thead>
-          <tr>
-            <th>Room</th>
-            <th>item_key</th>
-            <th>Expense</th>
-            <th>Category</th>
-            <th class="right">Est (€)</th>
-            <th class="right">Actual (€)</th>
-            <th>Status</th>
-            <th>Link</th>
-          </tr>
-          </thead>
-          <tbody id="allExpensesTbody"></tbody>
-          <tfoot>
-          <tr>
-            <td colspan="4" class="muted"><b>Totals (filtered)</b></td>
-            <td class="right mono" id="tfootEst">0.00</td>
-            <td class="right mono" id="tfootAct">0.00</td>
-            <td colspan="2"></td>
-          </tr>
-          </tfoot>
-        </table>
-      </div>
-    </section>
-
-    <section id="tab-catalog" class="panel list-panel" style="display:none;">
-      <div class="list-header">
-        <div>
-          <h3>Catalog (grouped by item_key)</h3>
-          <div class="muted" style="font-size:12px; margin-top:4px;">
-            Track totals for things like <span class="pill">wood_floor</span> across rooms.
-          </div>
-        </div>
-      </div>
-
-      <div style="overflow:auto;">
-        <table>
-          <thead>
-          <tr>
-            <th>item_key</th>
-            <th>Lines</th>
-            <th class="right">Est total (€)</th>
-            <th class="right">Actual total (€)</th>
-            <th>Rooms</th>
-          </tr>
-          </thead>
-          <tbody id="catalogTbody"></tbody>
-        </table>
       </div>
     </section>
   </main>
@@ -896,7 +867,7 @@
       return {
         version: 1,
         currency: "EUR",
-        activeTab: "room",
+        activePanel: "plan",
         selectedRoomId: "",
         filters: { text:"", done:"all", type:"all", expenseCat:"all" },
         rooms: [],
@@ -918,10 +889,11 @@
 
   // DOM refs
   const elRoomList = document.getElementById("roomList");
-  const tabs = Array.from(document.querySelectorAll(".tab"));
-  const elTabRoom = document.getElementById("tab-room");
-  const elTabExpenses = document.getElementById("tab-expenses");
-  const elTabCatalog = document.getElementById("tab-catalog");
+  const panelTabs = Array.from(document.querySelectorAll("[data-panel]"));
+  const viewPlan = document.getElementById("view-plan");
+  const viewExpenses = document.getElementById("view-expenses");
+  const viewCatalog = document.getElementById("view-catalog");
+  const roomFilterBadge = document.getElementById("roomFilterBadge");
 
   const filterText = document.getElementById("filterText");
   const filterDone = document.getElementById("filterDone");
@@ -1021,10 +993,14 @@
     });
   });
 
-  tabs.forEach(t => t.addEventListener("click", () => {
-    state.activeTab = t.dataset.tab;
+  panelTabs.forEach(t => t.addEventListener("click", () => {
+    state.activePanel = t.dataset.panel;
     saveState(); render();
   }));
+  roomFilterBadge.addEventListener("click", () => {
+    state.selectedRoomId = "";
+    saveState(); render();
+  });
 
   dlgKind.addEventListener("change", updateExpenseFieldsVisibility);
 
@@ -1063,7 +1039,6 @@
     state.selectedRoomId = newItem.roomId;
     saveState();
     dlgItem.close();
-    setActiveTab("room");
   });
 
   dlgRoomSave.addEventListener("click", (e) => {
@@ -1099,7 +1074,7 @@
       state.rooms = rooms;
       state.items = items;
       state.selectedRoomId = rooms[0]?.id || "";
-      state.activeTab = "room";
+      state.activePanel = "plan";
       saveState();
       dlgImport.close();
       render();
@@ -1108,8 +1083,8 @@
     }
   });
 
-  function setActiveTab(tab){
-    state.activeTab = tab;
+  function setActivePanel(panel){
+    state.activePanel = panel;
     saveState(); render();
   }
 
@@ -1166,7 +1141,7 @@
       const btn = document.createElement("button");
       btn.className = "room-btn" + (r.id === state.selectedRoomId ? " active" : "");
       btn.addEventListener("click", () => {
-        state.selectedRoomId = r.id;
+        state.selectedRoomId = r.id === state.selectedRoomId ? "" : r.id;
         saveState(); render();
       });
 
@@ -1205,11 +1180,21 @@
     kpiTodo.textContent = ov.todo;
     kpiDone.textContent = ov.done;
 
-    // tabs
-    tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === state.activeTab));
-    elTabRoom.style.display = state.activeTab === "room" ? "" : "none";
-    elTabExpenses.style.display = state.activeTab === "expenses" ? "" : "none";
-    elTabCatalog.style.display = state.activeTab === "catalog" ? "" : "none";
+    // panel switcher
+    const ap = state.activePanel || "plan";
+    panelTabs.forEach(t => t.classList.toggle("active", t.dataset.panel === ap));
+    viewPlan.style.display = ap === "plan" ? "" : "none";
+    viewExpenses.style.display = ap === "expenses" ? "" : "none";
+    viewCatalog.style.display = ap === "catalog" ? "" : "none";
+
+    // room filter badge
+    if (state.selectedRoomId){
+      const rf = getRoom(state.selectedRoomId);
+      roomFilterBadge.textContent = rf.name + " ×";
+      roomFilterBadge.style.display = "";
+    } else {
+      roomFilterBadge.style.display = "none";
+    }
 
     renderRoomDetails();
     renderAllExpenses();
@@ -1309,7 +1294,8 @@
   }
 
   function renderAllExpenses(){
-    const exp = state.items.filter(i => i.kind === "expense" && itemMatchesFilters(i));
+    let exp = state.items.filter(i => i.kind === "expense" && itemMatchesFilters(i));
+    if (state.selectedRoomId) exp = exp.filter(i => i.roomId === state.selectedRoomId);
     allExpensesTbody.innerHTML = "";
     exp.forEach(e => {
       const r = getRoom(e.roomId);
@@ -1337,7 +1323,8 @@
   }
 
   function renderCatalog(){
-    const exp = state.items.filter(i => i.kind === "expense" && itemMatchesFilters(i));
+    let exp = state.items.filter(i => i.kind === "expense" && itemMatchesFilters(i));
+    if (state.selectedRoomId) exp = exp.filter(i => i.roomId === state.selectedRoomId);
     const map = new Map();
     for (const e of exp){
       const key = (e.item_key || "").trim() || "(no_key)";
@@ -1442,7 +1429,7 @@
       state.rooms = roomsFromCSV(roomsText);
       state.items = itemsFromCSV(itemsText);
       state.selectedRoomId = state.rooms[0]?.id || "";
-      state.activeTab = "room";
+      state.activePanel = "plan";
       saveState();
       await loadAndAttachPlanSvg();
       render();
@@ -1472,8 +1459,7 @@
       el.style.cursor = "pointer";
       el.addEventListener("click", (e) => {
         e.preventDefault();
-        state.selectedRoomId = id;
-        state.activeTab = "room";
+        state.selectedRoomId = id === state.selectedRoomId ? "" : id;
         saveState();
         render();
       });
