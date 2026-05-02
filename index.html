@@ -428,12 +428,13 @@
   </aside>
 
   <main class="content">
-    <!-- Sticky top panel: Plan / Expenses / Catalog -->
+    <!-- Sticky top panel: Plan / Expenses / Catalog / Item Keys -->
     <div id="topPanel" class="panel map-wrap">
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
         <div class="tab active" data-panel="plan">Plan</div>
         <div class="tab" data-panel="expenses">Expenses</div>
         <div class="tab" data-panel="catalog">Catalog</div>
+        <div class="tab" data-panel="keys">Item Keys</div>
         <div style="margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <span id="roomFilterBadge" class="pill accent" style="display:none; cursor:pointer; user-select:none;" title="Clear room filter"></span>
           <button class="btn small" id="btnReloadDefaults">Reload defaults</button>
@@ -488,6 +489,33 @@
           </thead>
           <tbody id="catalogTbody"></tbody>
         </table>
+      </div>
+
+      <div id="view-keys" style="display:none;">
+        <div class="list-header" style="margin-bottom:8px;">
+          <h3>Item Keys</h3>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="newKeyInput" type="text" placeholder="New key..." style="width:200px; margin:0;" />
+            <button class="btn small primary" id="btnAddKey">+ Add key</button>
+            <button class="btn small" id="btnPullSharedKeys">Pull shared</button>
+            <button class="btn small" id="btnPushSharedKeys" title="Requires write endpoint">Push shared</button>
+          </div>
+        </div>
+        <div id="keysSyncStatus" class="muted" style="font-size:12px; margin-bottom:8px;"></div>
+        <div style="overflow:auto; max-height:52vh;">
+          <table>
+            <thead>
+            <tr>
+              <th>Key</th>
+              <th>Items</th>
+              <th class="right">Est (EUR)</th>
+              <th class="right">Act (EUR)</th>
+              <th></th>
+            </tr>
+            </thead>
+            <tbody id="keysTbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -559,7 +587,7 @@
 
 <!-- Item dialog -->
 <dialog id="dlgItem">
-  <form method="dialog" class="dlg">
+  <form method="dialog" class="dlg" id="dlgItemForm">
     <h3 id="dlgTitle">Add item</h3>
     <div class="muted" style="font-size:12px;" id="dlgSubtitle"></div>
 
@@ -583,8 +611,9 @@
       </div>
 
       <div class="field full" id="expenseOnlyKey">
-        <label for="dlgItemKey">Item key (for grouping)</label>
-        <input id="dlgItemKey" type="text" placeholder="e.g., wood_floor, sofa_corner, bathroom_sink_unit" />
+        <label for="dlgItemKeySelect">Item key (for grouping)</label>
+        <select id="dlgItemKeySelect"></select>
+        <input id="dlgItemKey" type="text" placeholder="New key (e.g. wood_floor)" style="display:none; margin-top:6px;" />
       </div>
 
       <div class="field" id="expenseOnlyCat">
@@ -634,7 +663,7 @@
     </div>
 
     <div class="dlg-actions">
-      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn" type="button" id="dlgItemCancel">Cancel</button>
       <button class="btn primary" id="dlgSave" value="default">Save</button>
     </div>
   </form>
@@ -642,7 +671,7 @@
 
 <!-- Room dialog -->
 <dialog id="dlgRoomEdit">
-  <form method="dialog" class="dlg">
+  <form method="dialog" class="dlg" id="dlgRoomForm">
     <h3>Edit room</h3>
     <div class="muted" style="font-size:12px;">This updates data locally; export CSV to persist to repo.</div>
 
@@ -697,8 +726,11 @@
 
 <script>
   const STORAGE_KEY = "home_planner_pages_v1";
+  const ITEM_KEYS_STORAGE_KEY = "home_planner_item_keys_v1";
   const DEFAULT_ROOMS_URL = "./rooms.csv";
   const DEFAULT_ITEMS_URL = "./items.csv";
+  const DEFAULT_ITEM_KEYS_URL = "./item_keys.csv";
+  const ITEM_KEYS_WRITE_URL = "";
   const PLAN_SVG_URL = "./plan.svg";
 
   const uid = () => crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2);
@@ -830,6 +862,28 @@
     }
     return out;
   }
+  function itemKeysFromCSV(text){
+    const rows = parseCSV(text);
+    if (!rows.length) return [];
+    const header = rows[0].map(h => h.trim().toLowerCase());
+    const idx = indexer(header);
+    const hasHeader = idx.has("item_key") || idx.has("key");
+    const out = [];
+    if (hasHeader){
+      for (let i=1;i<rows.length;i++){
+        const r = rows[i];
+        const v = val(r, idx, "item_key") || val(r, idx, "key");
+        const k = normalizeKey(v);
+        if (k) out.push(k);
+      }
+      return out;
+    }
+    for (const r of rows){
+      const k = normalizeKey(r[0] || "");
+      if (k) out.push(k);
+    }
+    return out;
+  }
 
   function roomsToCSVRows(rooms){
     const header = ["room_id","name","area_m2","notes"];
@@ -851,6 +905,11 @@
     }
     return rows;
   }
+  function itemKeysToCSVRows(keys){
+    const rows = [["item_key"]];
+    for (const k of uniqueSortedKeys(keys)) rows.push([k]);
+    return rows;
+  }
 
   function escapeHtml(s){
     return String(s ?? "")
@@ -866,6 +925,7 @@
 
   // state
   let state = loadState();
+  ensureItemKeys();
   function loadState(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw){
@@ -889,7 +949,78 @@
     }
   }
   function saveState(){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const stateToStore = {...state};
+    delete stateToStore.itemKeys;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToStore));
+    saveItemKeysStorage(state.itemKeys);
+  }
+  function uniqueSortedKeys(arr){
+    const set = new Set();
+    for (const raw of (arr || [])){
+      const k = normalizeKey(raw);
+      if (k) set.add(k);
+    }
+    return Array.from(set).sort((a,b) => a.localeCompare(b));
+  }
+  function loadItemKeysStorage(){
+    const raw = localStorage.getItem(ITEM_KEYS_STORAGE_KEY);
+    if (!raw) return [];
+    try{
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return uniqueSortedKeys(parsed);
+    }catch{
+      localStorage.removeItem(ITEM_KEYS_STORAGE_KEY);
+      return [];
+    }
+  }
+  function saveItemKeysStorage(keys){
+    localStorage.setItem(ITEM_KEYS_STORAGE_KEY, JSON.stringify(uniqueSortedKeys(keys)));
+  }
+  function setKeysSyncStatus(msg){
+    if (!keysSyncStatus) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    keysSyncStatus.textContent = msg ? ("[" + hh + ":" + mm + "] " + msg) : "";
+  }
+  async function pullSharedItemKeys(showStatus){
+    try{
+      const res = await fetch(DEFAULT_ITEM_KEYS_URL, {cache:"no-store"});
+      if (!res.ok) throw new Error("No shared key file found (" + res.status + ")");
+      const text = await res.text();
+      const pulled = itemKeysFromCSV(text);
+      if (pulled.length){
+        state.itemKeys = uniqueSortedKeys([...(state.itemKeys || []), ...pulled]);
+        saveState();
+        render();
+      }
+      if (showStatus) setKeysSyncStatus("Pulled shared keys (" + pulled.length + ").");
+      return pulled.length;
+    }catch(err){
+      if (showStatus) setKeysSyncStatus("Shared pull skipped: " + err.message);
+      return 0;
+    }
+  }
+  async function pushSharedItemKeys(){
+    if (!ITEM_KEYS_WRITE_URL){
+      setKeysSyncStatus("Push unavailable: configure ITEM_KEYS_WRITE_URL.");
+      return false;
+    }
+    try{
+      const body = toCSV(itemKeysToCSVRows(state.itemKeys || []));
+      const res = await fetch(ITEM_KEYS_WRITE_URL, {
+        method: "PUT",
+        headers: {"Content-Type": "text/csv"},
+        body,
+      });
+      if (!res.ok) throw new Error("write failed (" + res.status + ")");
+      setKeysSyncStatus("Pushed shared keys.");
+      return true;
+    }catch(err){
+      setKeysSyncStatus("Shared push failed: " + err.message);
+      return false;
+    }
   }
 
   // DOM refs
@@ -898,6 +1029,7 @@
   const viewPlan = document.getElementById("view-plan");
   const viewExpenses = document.getElementById("view-expenses");
   const viewCatalog = document.getElementById("view-catalog");
+  const viewKeys = document.getElementById("view-keys");
   const roomFilterBadge = document.getElementById("roomFilterBadge");
 
   const filterText = document.getElementById("filterText");
@@ -927,15 +1059,19 @@
   const tfootEst = document.getElementById("tfootEst");
   const tfootAct = document.getElementById("tfootAct");
   const catalogTbody = document.getElementById("catalogTbody");
+  const keysTbody = document.getElementById("keysTbody");
+  const keysSyncStatus = document.getElementById("keysSyncStatus");
 
   // dialogs
   const dlgItem = document.getElementById("dlgItem");
+  const dlgItemForm = document.getElementById("dlgItemForm");
   const dlgTitle = document.getElementById("dlgTitle");
   const dlgSubtitle = document.getElementById("dlgSubtitle");
   const dlgName = document.getElementById("dlgName");
   const dlgRoom = document.getElementById("dlgRoom");
   const dlgKind = document.getElementById("dlgKind");
   const dlgItemKey = document.getElementById("dlgItemKey");
+  const dlgItemKeySelect = document.getElementById("dlgItemKeySelect");
   const dlgCategory = document.getElementById("dlgCategory");
   const dlgEst = document.getElementById("dlgEst");
   const dlgAct = document.getElementById("dlgAct");
@@ -943,8 +1079,10 @@
   const dlgNotes = document.getElementById("dlgNotes");
   const dlgDone = document.getElementById("dlgDone");
   const dlgSave = document.getElementById("dlgSave");
+  const dlgItemCancel = document.getElementById("dlgItemCancel");
 
   const dlgRoomEdit = document.getElementById("dlgRoomEdit");
+  const dlgRoomForm = document.getElementById("dlgRoomForm");
   const dlgRoomName = document.getElementById("dlgRoomName");
   const dlgRoomArea = document.getElementById("dlgRoomArea");
   const dlgRoomId = document.getElementById("dlgRoomId");
@@ -970,11 +1108,28 @@
   document.getElementById("btnAddExpenseInRoom").addEventListener("click", () => openAddDialog("expense", state.selectedRoomId));
 
   document.getElementById("btnEditRoom").addEventListener("click", () => openRoomDialog(state.selectedRoomId));
-  btnSaveRoomNotes.addEventListener("click", () => {
+  function saveCurrentRoomNotes(){
+    if (!state.selectedRoomId) return;
     const r = getRoom(state.selectedRoomId);
-    r.notes = roomNotes.value ?? "";
-    saveState(); render();
+    if (!r || !r.id) return;
+    const next = roomNotes.value ?? "";
+    if ((r.notes || "") === next) return;
+    r.notes = next;
+    saveState();
+  }
+  btnSaveRoomNotes.addEventListener("click", () => {
+    saveCurrentRoomNotes();
+    render();
   });
+  let roomNotesTimer = null;
+  roomNotes.addEventListener("input", () => {
+    if (roomNotesTimer) clearTimeout(roomNotesTimer);
+    roomNotesTimer = setTimeout(() => {
+      saveCurrentRoomNotes();
+      roomNotesTimer = null;
+    }, 300);
+  });
+  roomNotes.addEventListener("blur", saveCurrentRoomNotes);
 
   document.getElementById("btnExportCsv").addEventListener("click", exportCSV);
   document.getElementById("btnImportCsv").addEventListener("click", () => { fileRooms.value=""; fileItems.value=""; dlgImport.showModal(); });
@@ -982,11 +1137,21 @@
   document.getElementById("btnReset").addEventListener("click", () => {
     if (!confirm("Reset local browser data to defaults from CSV?")) return;
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ITEM_KEYS_STORAGE_KEY);
     state = loadState();
     bootstrapFromDefaults();
   });
 
-  document.getElementById("btnReloadDefaults").addEventListener("click", bootstrapFromDefaults);
+  document.getElementById("btnReloadDefaults").addEventListener("click", () => {
+    if (!confirm("Reload defaults will overwrite current local rooms/items. Continue?")) return;
+    bootstrapFromDefaults();
+  });
+  document.getElementById("btnPullSharedKeys").addEventListener("click", () => {
+    pullSharedItemKeys(true);
+  });
+  document.getElementById("btnPushSharedKeys").addEventListener("click", () => {
+    pushSharedItemKeys();
+  });
 
   [filterText, filterDone, filterType, filterExpenseCat].forEach(el => {
     el.addEventListener("input", () => {
@@ -1008,17 +1173,50 @@
   });
 
   dlgKind.addEventListener("change", updateExpenseFieldsVisibility);
+  dlgItemKeySelect.addEventListener("change", () => {
+    const isNew = dlgItemKeySelect.value === "__new__";
+    dlgItemKey.style.display = isNew ? "" : "none";
+    if (!isNew) dlgItemKey.value = "";
+  });
+  document.getElementById("btnAddKey").addEventListener("click", () => {
+    const inp = document.getElementById("newKeyInput");
+    const k = normalizeKey(inp.value);
+    if (!k) return;
+    if (!state.itemKeys.includes(k)) {
+      state.itemKeys.push(k);
+      state.itemKeys.sort((a,b) => a.localeCompare(b));
+      saveState(); render();
+      pushSharedItemKeys();
+    }
+    inp.value = "";
+  });
 
   let editingItemId = null;
-  dlgSave.addEventListener("click", (e) => {
+  dlgItemCancel.addEventListener("click", () => dlgItem.close());
+
+  function saveItemFromDialog(e){
     e.preventDefault();
+    if (e.type === "submit" && e.submitter && e.submitter.id !== "dlgSave") {
+      dlgItem.close();
+      return;
+    }
     const name = (dlgName.value || "").trim();
     if (!name){ alert("Name is required."); return; }
 
     const kind = dlgKind.value;
-    let key = (dlgItemKey.value || "").trim();
-    if (kind === "expense" && !key) key = normalizeKey(name);
-    if (kind !== "expense") key = "";
+    let key = "";
+    if (kind === "expense") {
+      if (dlgItemKeySelect.value === "__new__") {
+        key = normalizeKey(dlgItemKey.value) || normalizeKey(name);
+        if (key && !state.itemKeys.includes(key)) {
+          state.itemKeys.push(key);
+          state.itemKeys.sort((a,b) => a.localeCompare(b));
+          pushSharedItemKeys();
+        }
+      } else {
+        key = dlgItemKeySelect.value || "";
+      }
+    }
 
     const newItem = {
       id: editingItemId || uid(),
@@ -1044,10 +1242,16 @@
     state.selectedRoomId = newItem.roomId;
     saveState();
     dlgItem.close();
-  });
+  }
+  dlgSave.addEventListener("click", saveItemFromDialog);
+  dlgItemForm.addEventListener("submit", saveItemFromDialog);
 
-  dlgRoomSave.addEventListener("click", (e) => {
+  function saveRoomFromDialog(e){
     e.preventDefault();
+    if (e.type === "submit" && e.submitter && e.submitter.id !== "dlgRoomSave") {
+      dlgRoomEdit.close();
+      return;
+    }
     const r = getRoom(state.selectedRoomId);
     const nm = (dlgRoomName.value || "").trim();
     if (!nm){ alert("Room name is required."); return; }
@@ -1056,7 +1260,9 @@
     saveState();
     dlgRoomEdit.close();
     render();
-  });
+  }
+  dlgRoomSave.addEventListener("click", saveRoomFromDialog);
+  dlgRoomForm.addEventListener("submit", saveRoomFromDialog);
 
   btnDoImport.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -1078,6 +1284,7 @@
       }
       state.rooms = rooms;
       state.items = items;
+      ensureItemKeys();
       state.selectedRoomId = "";
       state.activePanel = "plan";
       saveState();
@@ -1091,6 +1298,87 @@
   function setActivePanel(panel){
     state.activePanel = panel;
     saveState(); render();
+  }
+
+  function ensureItemKeys(){
+    const fromStorage = loadItemKeysStorage();
+    const fromState = Array.isArray(state.itemKeys) ? state.itemKeys : [];
+    const fromItems = state.items.map(it => it.item_key || "");
+    state.itemKeys = uniqueSortedKeys([...fromStorage, ...fromState, ...fromItems]);
+    saveItemKeysStorage(state.itemKeys);
+  }
+
+  function populateItemKeySelect(currentKey){
+    dlgItemKeySelect.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "(no key)";
+    dlgItemKeySelect.appendChild(blank);
+    for (const k of state.itemKeys){
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = k;
+      if (k === currentKey) opt.selected = true;
+      dlgItemKeySelect.appendChild(opt);
+    }
+    const newOpt = document.createElement("option");
+    newOpt.value = "__new__";
+    newOpt.textContent = "+ Add new key...";
+    dlgItemKeySelect.appendChild(newOpt);
+    if (currentKey && !state.itemKeys.includes(currentKey)){
+      dlgItemKeySelect.value = "__new__";
+      dlgItemKey.value = currentKey;
+      dlgItemKey.style.display = "";
+    } else {
+      dlgItemKey.value = "";
+      dlgItemKey.style.display = "none";
+      dlgItemKeySelect.value = currentKey || "";
+    }
+  }
+
+  function renderKeys(){
+    if (!keysTbody) return;
+    keysTbody.innerHTML = "";
+    for (const k of state.itemKeys){
+      const lines = state.items.filter(i => i.kind === "expense" && i.item_key === k);
+      const est = sum(lines.map(x => Number(x.est) || 0));
+      const act = sum(lines.map(x => Number(x.act) || 0));
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td class=\"mono\">" + escapeHtml(k) + "</td>" +
+        "<td class=\"mono\">" + lines.length + "</td>" +
+        "<td class=\"right mono\">" + money(est) + "</td>" +
+        "<td class=\"right mono\">" + money(act) + "</td>" +
+        "<td style=\"text-align:right;\"><button class=\"btn small\" data-renamekey=\"" + escapeAttr(k) + "\">Rename</button> <button class=\"btn small danger\" data-delkey=\"" + escapeAttr(k) + "\">Delete</button></td>";
+      tr.querySelector("[data-renamekey]").addEventListener("click", () => {
+        const typed = prompt('Rename key "' + k + '" to:', k);
+        if (typed === null) return;
+        const next = normalizeKey(typed);
+        if (!next){
+          alert("Key cannot be empty.");
+          return;
+        }
+        if (next === k) return;
+        if (state.itemKeys.includes(next) && !confirm('Key "' + next + '" already exists. Merge into it?')) return;
+        for (const it of state.items){
+          if (it.kind === "expense" && normalizeKey(it.item_key || "") === k){
+            it.item_key = next;
+          }
+        }
+        state.itemKeys = state.itemKeys.filter(x => x !== k);
+        if (!state.itemKeys.includes(next)) state.itemKeys.push(next);
+        ensureItemKeys();
+        saveState(); render();
+        pushSharedItemKeys();
+      });
+      tr.querySelector("[data-delkey]").addEventListener("click", () => {
+        if (!confirm('Remove key "' + k + '" from registry? Existing items keep their key.')) return;
+        state.itemKeys = state.itemKeys.filter(x => x !== k);
+        saveState(); render();
+        pushSharedItemKeys();
+      });
+      keysTbody.appendChild(tr);
+    }
   }
 
   function getRoom(roomId){
@@ -1191,6 +1479,7 @@
     viewPlan.style.display = ap === "plan" ? "" : "none";
     viewExpenses.style.display = ap === "expenses" ? "" : "none";
     viewCatalog.style.display = ap === "catalog" ? "" : "none";
+    viewKeys.style.display = ap === "keys" ? "" : "none";
 
     // room filter badge
     if (state.selectedRoomId){
@@ -1204,6 +1493,7 @@
     renderRoomDetails();
     renderAllExpenses();
     renderCatalog();
+    renderKeys();
     highlightRoomInSvg(state.selectedRoomId);
   }
 
@@ -1388,7 +1678,7 @@
     dlgEst.value = "";
     dlgAct.value = "";
     dlgCategory.value = "materials";
-    dlgItemKey.value = "";
+    populateItemKeySelect("");
 
     populateRoomSelect(roomId || state.rooms[0]?.id || "");
     updateExpenseFieldsVisibility();
@@ -1411,7 +1701,7 @@
     dlgEst.value = item.est ?? "";
     dlgAct.value = item.act ?? "";
     dlgCategory.value = item.category || "other";
-    dlgItemKey.value = item.item_key || "";
+    populateItemKeySelect(item.item_key || "");
 
     populateRoomSelect(item.roomId);
     updateExpenseFieldsVisibility();
@@ -1429,6 +1719,7 @@
   function exportCSV(){
     downloadText("rooms.csv", toCSV(roomsToCSVRows(state.rooms)), "text/csv");
     downloadText("items.csv", toCSV(itemsToCSVRows(state.items)), "text/csv");
+    downloadText("item_keys.csv", toCSV(itemKeysToCSVRows(state.itemKeys || [])), "text/csv");
   }
 
   async function bootstrapFromDefaults(){
@@ -1439,6 +1730,8 @@
       ]);
       state.rooms = roomsFromCSV(roomsText);
       state.items = itemsFromCSV(itemsText);
+      ensureItemKeys();
+      await pullSharedItemKeys(false);
       state.selectedRoomId = "";
       state.activePanel = "plan";
       saveState();
@@ -1523,6 +1816,7 @@
       await bootstrapFromDefaults();
     } else {
       try{ await loadAndAttachPlanSvg(); } catch {}
+      await pullSharedItemKeys(false);
       render();
     }
   })();
