@@ -1,0 +1,71 @@
+{
+  "rooms": [
+    {
+      "id": "exterior",
+      "name": "Exterior (garden)",
+      "area_m2": null,
+      "notes": "~6m x 4m"
+    },
+    {
+      "id": "extension",
+      "name": "Extension",
+      "area_m2": 17,
+      "notes": ""
+    },
+    {
+      "id": "kitchen",
+      "name": "Kitchen",
+      "area_m2": 8,
+      "notes": "Open space with dining room"
+    },
+    {
+      "id": "dining",
+      "name": "Dining room",
+      "area_m2": 20,
+      "notes": "Open space with kitchen"
+    },
+    {
+      "id": "cabinet",
+      "name": "Cabinet",
+      "area_m2": null,
+      "notes": ""
+    },
+    {
+      "id": "bathroom",
+      "name": "Bathroom",
+      "area_m2": 5,
+      "notes": ""
+    },
+    {
+      "id": "cellar",
+      "name": "Cellar",
+      "area_m2": null,
+      "notes": ""
+    },
+    {
+      "id": "parents",
+      "name": "Parental bedroom",
+      "area_m2": null,
+      "notes": ""
+    },
+    {
+      "id": "kids1",
+      "name": "Kids bedroom 1 (downstairs)",
+      "area_m2": null,
+      "notes": ""
+    },
+    {
+      "id": "kids2",
+      "name": "Kids bedroom 2 (upstairs)",
+      "area_m2": null,
+      "notes": "Linked via stairs near entrance (not drawn in placeholder SVG)"
+    },
+    {
+      "id": "entrance",
+      "name": "Entrance",
+      "area_m2": null,
+      "notes": ""
+    }
+  ],
+  "keys": []
+}

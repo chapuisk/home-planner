@@ -167,7 +167,14 @@
       outline:none;
     }
     textarea{ resize: vertical; min-height: 72px; }
-    .content{ padding: 16px; }
+    .content{
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--panel-gap);
+      min-height: calc(100dvh - var(--header-h));
+      align-self: start;
+    }
     .tabs{ display:flex; gap:8px; flex-wrap: wrap; margin-bottom: 12px; }
     .tab{
       padding: 8px 10px;
@@ -184,20 +191,42 @@
 
     @media (max-width: 1100px){
       .app{ grid-template-columns: 1fr; }
-      .sidebar{ border-right:none; border-bottom: 1px solid var(--border); }
+      .sidebar{
+        border-right:none;
+        border-bottom: 1px solid var(--border);
+        position: static;
+        max-height: none;
+        overflow: visible;
+      }
       .grid{ grid-template-columns: 1fr; }
     }
 
     #topPanel{
-      position: sticky;
-      top: var(--header-h);
-      z-index: 4;
+      position: relative;
+      flex: 0 0 auto;
+      max-height: min(44dvh, 540px);
+      overflow: auto;
     }
     #roomPanel{
-      position: sticky;
-      top: calc(var(--header-h) + var(--top-panel-h, 0px) + var(--panel-gap));
-      z-index: 3;
-      margin-top: var(--panel-gap);
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 340px;
+      max-height: min(52dvh, 760px);
+      overflow: auto;
+      margin-top: 0;
+    }
+
+    @media (max-width: 1100px){
+      .content{
+        min-height: auto;
+      }
+      #topPanel{
+        max-height: 38dvh;
+      }
+      #roomPanel{
+        min-height: 300px;
+        max-height: 48dvh;
+      }
     }
     .map-wrap{ padding: 12px; }
     .map-host{
@@ -357,8 +386,8 @@
     <button class="btn primary" id="btnAddWork">+ Work</button>
     <button class="btn primary" id="btnAddExpense">+ Expense</button>
 
-    <button class="btn" id="btnExportCsv">Export CSV</button>
-    <button class="btn" id="btnImportCsv">Import CSV</button>
+    <button class="btn" id="btnExportCsv">Export Items CSV</button>
+    <button class="btn" id="btnImportCsv">Import Items CSV</button>
 
     <button class="btn danger" id="btnReset">Reset (local)</button>
   </div>
@@ -406,7 +435,7 @@
       </div>
 
       <div class="footer-note">
-        Hosted version loads default <span class="pill">rooms.csv</span> and <span class="pill">items.csv</span>.
+        Hosted version loads default <span class="pill">metadata.json</span> and <span class="pill">items.csv</span>.
         Your edits are stored in <b>this browser</b> unless you export CSV.
       </div>
     </div>
@@ -584,7 +613,7 @@
           </div>
 
           <div class="footer-note">
-            Room area + id are in <span class="pill">rooms.csv</span>.
+            Room area + id are in <span class="pill">metadata.json</span>.
           </div>
         </div>
       </div>
@@ -709,22 +738,14 @@
 <!-- CSV Import dialog -->
 <dialog id="dlgImport">
   <form method="dialog" class="dlg">
-    <h3>Import CSV</h3>
-    <div class="muted" style="font-size:12px;">Import <b>rooms.csv</b> + <b>items.csv</b> to replace local data. <b>item_keys.csv</b> is optional (or can be imported alone).</div>
+    <h3>Import Items CSV</h3>
+    <div class="muted" style="font-size:12px;">Import <b>items.csv</b> to replace items. Missing rooms and item keys will be auto-created in local JSON metadata.</div>
 
     <div class="hr"></div>
     <div class="dlg-grid">
       <div class="field full">
-        <label>rooms.csv</label>
-        <input type="file" id="fileRooms" accept=".csv,text/csv" />
-      </div>
-      <div class="field full">
         <label>items.csv</label>
         <input type="file" id="fileItems" accept=".csv,text/csv" />
-      </div>
-      <div class="field full">
-        <label>item_keys.csv (optional)</label>
-        <input type="file" id="fileItemKeys" accept=".csv,text/csv" />
       </div>
     </div>
 
@@ -738,17 +759,14 @@
 <script>
   const STORAGE_KEY = "home_planner_pages_v1";
   const ITEM_KEYS_STORAGE_KEY = "home_planner_item_keys_v1";
-  const DEFAULT_ROOMS_URL = "./rooms.csv";
+  const DEFAULT_METADATA_URL = "./metadata.json";
   const DEFAULT_ITEMS_URL = "./items.csv";
-  const DEFAULT_ITEM_KEYS_URL = "./item_keys.csv";
   // Future backend wiring (set later when you have a server).
-  const FUTURE_ROOMS_READ_URL = "";
+  const FUTURE_METADATA_READ_URL = "";
   const FUTURE_ITEMS_READ_URL = "";
-  const FUTURE_KEYS_READ_URL = "";
-  const FUTURE_ROOMS_WRITE_URL = "";
+  const FUTURE_METADATA_WRITE_URL = "";
   const FUTURE_ITEMS_WRITE_URL = "";
-  const FUTURE_KEYS_WRITE_URL = "";
-  // Current key-write endpoint (kept for compatibility with existing key panel behavior).
+  // Current metadata write endpoint (kept for compatibility with existing key panel behavior).
   const ITEM_KEYS_WRITE_URL = "";
   const PLAN_SVG_URL = "./plan.svg";
 
@@ -855,6 +873,28 @@
     }
     return out;
   }
+  function metadataFromJSON(text){
+    const parsed = JSON.parse(text);
+    const roomRows = Array.isArray(parsed) ? parsed : Array.isArray(parsed.rooms) ? parsed.rooms : [];
+    const keyRows = Array.isArray(parsed?.keys) ? parsed.keys : [];
+    const rooms = roomRows
+      .map((r) => ({
+        id: String(r?.id || "").trim(),
+        name: String(r?.name || r?.id || "").trim(),
+        area_m2: numOrNull(r?.area_m2),
+        notes: String(r?.notes || "").trim(),
+      }))
+      .filter((r) => r.id);
+    const keys = [];
+    const keyMeta = {};
+    for (const row of keyRows){
+      const key = normalizeKey(typeof row === "string" ? row : (row?.key || row?.id || row?.name || ""));
+      if (!key) continue;
+      keys.push(key);
+      keyMeta[key] = String(typeof row === "string" ? "" : (row?.description || "")).trim();
+    }
+    return { rooms, keys: uniqueSortedKeys(keys), keyMeta };
+  }
   function itemsFromCSV(text){
     const rows = parseCSV(text);
     const header = rows[0].map(h => h.trim());
@@ -881,29 +921,6 @@
     }
     return out;
   }
-  function itemKeysFromCSV(text){
-    const rows = parseCSV(text);
-    if (!rows.length) return [];
-    const header = rows[0].map(h => h.trim().toLowerCase());
-    const idx = indexer(header);
-    const hasHeader = idx.has("item_key") || idx.has("key");
-    const out = [];
-    if (hasHeader){
-      for (let i=1;i<rows.length;i++){
-        const r = rows[i];
-        const v = val(r, idx, "item_key") || val(r, idx, "key");
-        const k = normalizeKey(v);
-        if (k) out.push(k);
-      }
-      return out;
-    }
-    for (const r of rows){
-      const k = normalizeKey(r[0] || "");
-      if (k) out.push(k);
-    }
-    return out;
-  }
-
   function roomsToCSVRows(rooms){
     const header = ["room_id","name","area_m2","notes"];
     const rows = [header];
@@ -924,10 +941,30 @@
     }
     return rows;
   }
-  function itemKeysToCSVRows(keys){
-    const rows = [["item_key"]];
-    for (const k of uniqueSortedKeys(keys)) rows.push([k]);
-    return rows;
+  function itemKeysToJSONData(keys, meta){
+    return uniqueSortedKeys(keys).map((key) => ({
+        key,
+        description: (meta && meta[key]) || "Auto-created from items",
+    }));
+  }
+  function metadataToJSONData(rooms, keys, meta){
+    return {
+      rooms: (rooms || []).map((room) => ({
+        id: room.id,
+        name: room.name,
+        area_m2: room.area_m2 ?? null,
+        notes: room.notes || "",
+      })),
+      keys: itemKeysToJSONData(keys || [], meta || {}),
+    };
+  }
+
+  function defaultRoomName(roomId){
+    return String(roomId || "")
+      .split(/[_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ") || String(roomId || "");
   }
 
   function escapeHtml(s){
@@ -955,6 +992,7 @@
         selectedRoomId: "",
         filters: { text:"", done:"all", type:"all", expenseCat:"all" },
         rooms: [],
+        itemKeyMeta: {},
         items: []
       };
     }
@@ -996,6 +1034,28 @@
   function saveItemKeysStorage(keys){
     localStorage.setItem(ITEM_KEYS_STORAGE_KEY, JSON.stringify(uniqueSortedKeys(keys)));
   }
+  function ensureItemKeyMeta(keys, description){
+    if (!state.itemKeyMeta || typeof state.itemKeyMeta !== "object") state.itemKeyMeta = {};
+    for (const raw of (keys || [])){
+      const key = normalizeKey(raw);
+      if (!key) continue;
+      if (!state.itemKeyMeta[key]) state.itemKeyMeta[key] = description || "Auto-created from items";
+    }
+  }
+  function ensureRoomsFromItems(items, description){
+    const existing = new Set((state.rooms || []).map((room) => room.id));
+    for (const item of (items || [])){
+      const roomId = String(item?.roomId || "").trim();
+      if (!roomId || existing.has(roomId)) continue;
+      existing.add(roomId);
+      state.rooms.push({
+        id: roomId,
+        name: defaultRoomName(roomId),
+        area_m2: null,
+        notes: description || "Auto-created from imported items",
+      });
+    }
+  }
   function setKeysSyncStatus(msg){
     if (!keysSyncStatus) return;
     const now = new Date();
@@ -1005,17 +1065,20 @@
   }
   async function pullSharedItemKeys(showStatus){
     try{
-      const res = await fetch(DEFAULT_ITEM_KEYS_URL, {cache:"no-store"});
-      if (!res.ok) throw new Error("No shared key file found (" + res.status + ")");
+      const res = await fetch(FUTURE_METADATA_READ_URL || DEFAULT_METADATA_URL, {cache:"no-store"});
+      if (!res.ok) throw new Error("No shared metadata file found (" + res.status + ")");
       const text = await res.text();
-      const pulled = itemKeysFromCSV(text);
-      if (pulled.length){
-        state.itemKeys = uniqueSortedKeys([...(state.itemKeys || []), ...pulled]);
+      const pulled = metadataFromJSON(text);
+      if (pulled.keys.length || pulled.rooms.length){
+        state.rooms = pulled.rooms.length ? pulled.rooms : state.rooms;
+        state.itemKeys = uniqueSortedKeys([...(state.itemKeys || []), ...pulled.keys]);
+        state.itemKeyMeta = { ...(state.itemKeyMeta || {}), ...pulled.keyMeta };
+        ensureItemKeyMeta(state.itemKeys, "Auto-created from items");
         saveState();
         render();
       }
-      if (showStatus) setKeysSyncStatus("Pulled shared keys (" + pulled.length + ").");
-      return pulled.length;
+      if (showStatus) setKeysSyncStatus("Pulled shared keys (" + pulled.keys.length + ").");
+      return pulled.keys.length;
     }catch(err){
       if (showStatus) setKeysSyncStatus("Shared pull skipped: " + err.message);
       return 0;
@@ -1027,10 +1090,10 @@
       return false;
     }
     try{
-      const body = toCSV(itemKeysToCSVRows(state.itemKeys || []));
+      const body = JSON.stringify(metadataToJSONData(state.rooms || [], state.itemKeys || [], state.itemKeyMeta || {}), null, 2);
       const res = await fetch(ITEM_KEYS_WRITE_URL, {
         method: "PUT",
-        headers: {"Content-Type": "text/csv"},
+        headers: {"Content-Type": "application/json"},
         body,
       });
       if (!res.ok) throw new Error("write failed (" + res.status + ")");
@@ -1110,9 +1173,7 @@
   const dlgRoomSave = document.getElementById("dlgRoomSave");
 
   const dlgImport = document.getElementById("dlgImport");
-  const fileRooms = document.getElementById("fileRooms");
   const fileItems = document.getElementById("fileItems");
-  const fileItemKeys = document.getElementById("fileItemKeys");
   const btnDoImport = document.getElementById("btnDoImport");
 
   const expenseOnly = [
@@ -1155,9 +1216,7 @@
 
   document.getElementById("btnExportCsv").addEventListener("click", exportCSV);
   document.getElementById("btnImportCsv").addEventListener("click", () => {
-    fileRooms.value = "";
     fileItems.value = "";
-    if (fileItemKeys) fileItemKeys.value = "";
     dlgImport.showModal();
   });
 
@@ -1299,60 +1358,17 @@
 
   btnDoImport.addEventListener("click", async (e) => {
     e.preventDefault();
-    const hasRooms = !!fileRooms.files[0];
     const hasItems = !!fileItems.files[0];
-    const hasKeys = !!(fileItemKeys && fileItemKeys.files[0]);
-
-    // Allow keys-only import for quick cross-browser key sync.
-    if (!hasRooms && !hasItems && hasKeys){
-      try{
-        const keysText = await fileItemKeys.files[0].text();
-        const importedKeys = itemKeysFromCSV(keysText);
-        state.itemKeys = uniqueSortedKeys(importedKeys);
-        ensureItemKeys();
-        saveState();
-        dlgImport.close();
-        render();
-      }catch(err){
-        alert("Import failed: " + err.message);
-      }
-      return;
-    }
-
-    if (hasRooms !== hasItems){
-      alert("Please select both rooms.csv and items.csv (or only item_keys.csv).");
-      return;
-    }
-    if (!hasRooms && !hasItems && !hasKeys){
-      alert("Please select files to import.");
+    if (!hasItems){
+      alert("Please select items.csv to import.");
       return;
     }
 
     try{
-      const roomsText = await fileRooms.files[0].text();
       const itemsText = await fileItems.files[0].text();
-      const rooms = roomsFromCSV(roomsText);
       const items = itemsFromCSV(itemsText);
-
-      const roomIds = new Set(rooms.map(r => r.id));
-      for (const it of items){
-        if (!roomIds.has(it.roomId)){
-          it.roomId = rooms[0]?.id || "";
-        }
-      }
-
-      let importedKeys = [];
-      if (hasKeys){
-        const keysText = await fileItemKeys.files[0].text();
-        importedKeys = itemKeysFromCSV(keysText);
-      }
-
-      state.rooms = rooms;
       state.items = items;
-      state.itemKeys = uniqueSortedKeys([
-        ...importedKeys,
-        ...items.map(it => it.item_key || "")
-      ]);
+      ensureRoomsFromItems(items, "Auto-created from imported items");
       ensureItemKeys();
       state.selectedRoomId = "";
       state.activePanel = "plan";
@@ -1374,6 +1390,7 @@
     const fromState = Array.isArray(state.itemKeys) ? state.itemKeys : [];
     const fromItems = state.items.map(it => it.item_key || "");
     state.itemKeys = uniqueSortedKeys([...fromStorage, ...fromState, ...fromItems]);
+    ensureItemKeyMeta(state.itemKeys, "Auto-created from items");
     saveItemKeysStorage(state.itemKeys);
   }
 
@@ -1786,19 +1803,21 @@
   }
 
   function exportCSV(){
-    downloadText("rooms.csv", toCSV(roomsToCSVRows(state.rooms)), "text/csv");
     downloadText("items.csv", toCSV(itemsToCSVRows(state.items)), "text/csv");
-    downloadText("item_keys.csv", toCSV(itemKeysToCSVRows(state.itemKeys || [])), "text/csv");
   }
 
   async function bootstrapFromDefaults(){
     try{
-      const [roomsText, itemsText] = await Promise.all([
-        fetch(DEFAULT_ROOMS_URL, {cache:"no-store"}).then(r => r.text()),
+      const [metadataText, itemsText] = await Promise.all([
+        fetch(DEFAULT_METADATA_URL, {cache:"no-store"}).then(r => r.text()),
         fetch(DEFAULT_ITEMS_URL, {cache:"no-store"}).then(r => r.text()),
       ]);
-      state.rooms = roomsFromCSV(roomsText);
+      const metadata = metadataFromJSON(metadataText);
+      state.rooms = metadata.rooms;
+      state.itemKeys = metadata.keys;
+      state.itemKeyMeta = metadata.keyMeta;
       state.items = itemsFromCSV(itemsText);
+      ensureRoomsFromItems(state.items, "Auto-created from items");
       ensureItemKeys();
       await pullSharedItemKeys(false);
       state.selectedRoomId = "";
