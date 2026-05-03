@@ -663,13 +663,21 @@
         </select>
       </div>
 
+      <div class="field full" id="expenseOnlyPerM2">
+        <label style="display:flex; align-items:center; gap:8px; color:var(--text);">
+          <input id="dlgPerM2" type="checkbox" style="width:auto; margin:0;" />
+          <span>Price this expense per m² using the selected room area</span>
+        </label>
+        <div class="muted" id="dlgPerM2Hint" style="font-size:12px;">When enabled, estimated and actual values are interpreted as €/m².</div>
+      </div>
+
       <div class="field" id="expenseOnlyEst">
-        <label for="dlgEst">Estimated (€)</label>
+        <label for="dlgEst" id="dlgEstLabel">Estimated (€)</label>
         <input id="dlgEst" type="number" step="0.01" min="0" placeholder="e.g., 1200" />
       </div>
 
       <div class="field" id="expenseOnlyAct">
-        <label for="dlgAct">Actual (€)</label>
+        <label for="dlgAct" id="dlgActLabel">Actual (€)</label>
         <input id="dlgAct" type="number" step="0.01" min="0" placeholder="e.g., 1189.90" />
       </div>
 
@@ -909,6 +917,7 @@
         id: val(r, idx, "item_id") || uid(),
         roomId: val(r, idx, "room_id") || "",
         kind,
+        per_m2: toBool(val(r, idx, "per_m2")),
         item_key: val(r, idx, "item_key") || "",
         name: val(r, idx, "name") || "",
         done: toBool(val(r, idx, "done")),
@@ -930,11 +939,11 @@
     return rows;
   }
   function itemsToCSVRows(items){
-    const header = ["item_id","room_id","kind","item_key","name","done","category","est_eur","act_eur","link","notes"];
+    const header = ["item_id","room_id","kind","per_m2","item_key","name","done","category","est_eur","act_eur","link","notes"];
     const rows = [header];
     for (const it of items){
       rows.push([
-        it.id, it.roomId, it.kind, it.item_key ?? "", it.name ?? "",
+        it.id, it.roomId, it.kind, toBool(it.per_m2) ? "1" : "0", it.item_key ?? "", it.name ?? "",
         toBool(it.done) ? "1" : "0",
         it.category ?? "", it.est ?? "", it.act ?? "", it.link ?? "", it.notes ?? ""
       ]);
@@ -1157,6 +1166,10 @@
   const dlgItemKey = document.getElementById("dlgItemKey");
   const dlgItemKeySelect = document.getElementById("dlgItemKeySelect");
   const dlgCategory = document.getElementById("dlgCategory");
+  const dlgPerM2 = document.getElementById("dlgPerM2");
+  const dlgPerM2Hint = document.getElementById("dlgPerM2Hint");
+  const dlgEstLabel = document.getElementById("dlgEstLabel");
+  const dlgActLabel = document.getElementById("dlgActLabel");
   const dlgEst = document.getElementById("dlgEst");
   const dlgAct = document.getElementById("dlgAct");
   const dlgLink = document.getElementById("dlgLink");
@@ -1179,6 +1192,7 @@
   const expenseOnly = [
     document.getElementById("expenseOnlyKey"),
     document.getElementById("expenseOnlyCat"),
+    document.getElementById("expenseOnlyPerM2"),
     document.getElementById("expenseOnlyEst"),
     document.getElementById("expenseOnlyAct"),
     document.getElementById("expenseOnlyLink"),
@@ -1270,6 +1284,8 @@
     dlgItemKey.style.display = isNew ? "" : "none";
     if (!isNew) dlgItemKey.value = "";
   });
+  dlgRoom.addEventListener("change", updatePerM2Labels);
+  dlgPerM2.addEventListener("change", updatePerM2Labels);
   document.getElementById("btnAddKey").addEventListener("click", () => {
     const inp = document.getElementById("newKeyInput");
     const k = normalizeKey(inp.value);
@@ -1296,6 +1312,7 @@
     if (!name){ alert("Name is required."); return; }
 
     const kind = dlgKind.value;
+    const perM2 = kind === "expense" && dlgPerM2.checked;
     let key = "";
     if (kind === "expense") {
       if (dlgItemKeySelect.value === "__new__") {
@@ -1314,6 +1331,7 @@
       id: editingItemId || uid(),
       roomId: dlgRoom.value,
       kind,
+      per_m2: perM2,
       item_key: key,
       name,
       done: dlgDone.value === "done",
@@ -1385,6 +1403,33 @@
     saveState(); render();
   }
 
+  function getExpenseAmounts(item){
+    const estBase = Number(item?.est) || 0;
+    const actBase = Number(item?.act) || 0;
+    if (!toBool(item?.per_m2)) {
+      return { est: estBase, act: actBase, area: null };
+    }
+    const room = getRoom(item?.roomId);
+    const area = Number(room?.area_m2) || 0;
+    return {
+      est: estBase * area,
+      act: actBase * area,
+      area,
+    };
+  }
+
+  function updatePerM2Labels(){
+    const isPerM2 = !!dlgPerM2.checked;
+    const room = getRoom(dlgRoom.value);
+    const area = Number(room?.area_m2) || 0;
+    const areaText = area ? ` Selected room area: ${money(area)} m².` : " Selected room has no area yet.";
+    dlgEstLabel.textContent = isPerM2 ? "Estimated (EUR/m²)" : "Estimated (EUR)";
+    dlgActLabel.textContent = isPerM2 ? "Actual (EUR/m²)" : "Actual (EUR)";
+    dlgPerM2Hint.textContent = isPerM2
+      ? "Estimated and actual values are multiplied by the room area." + areaText
+      : "When enabled, estimated and actual values are interpreted as EUR/m².";
+  }
+
   function ensureItemKeys(){
     const fromStorage = loadItemKeysStorage();
     const fromState = Array.isArray(state.itemKeys) ? state.itemKeys : [];
@@ -1411,15 +1456,9 @@
     newOpt.value = "__new__";
     newOpt.textContent = "+ Add new key...";
     dlgItemKeySelect.appendChild(newOpt);
-    if (currentKey && !state.itemKeys.includes(currentKey)){
-      dlgItemKeySelect.value = "__new__";
-      dlgItemKey.value = currentKey;
-      dlgItemKey.style.display = "";
-    } else {
-      dlgItemKey.value = "";
-      dlgItemKey.style.display = "none";
-      dlgItemKeySelect.value = currentKey || "";
-    }
+    dlgItemKey.value = "";
+    dlgItemKey.style.display = "none";
+    dlgItemKeySelect.value = state.itemKeys.includes(currentKey) ? currentKey : "";
   }
 
   function renderKeys(){
@@ -1497,14 +1536,14 @@
   }
   function roomExpenseTotals(roomId){
     const exp = state.items.filter(i => i.roomId === roomId && i.kind === "expense");
-    const est = sum(exp.map(e => Number(e.est) || 0));
-    const act = sum(exp.map(e => Number(e.act) || 0));
+    const est = sum(exp.map(e => getExpenseAmounts(e).est));
+    const act = sum(exp.map(e => getExpenseAmounts(e).act));
     return {est, act};
   }
   function overallTotals(){
     const exp = state.items.filter(i => i.kind === "expense");
-    const est = sum(exp.map(e => Number(e.est) || 0));
-    const act = sum(exp.map(e => Number(e.act) || 0));
+    const est = sum(exp.map(e => getExpenseAmounts(e).est));
+    const act = sum(exp.map(e => getExpenseAmounts(e).act));
     const todo = state.items.filter(i => !toBool(i.done)).length;
     const done = state.items.filter(i => toBool(i.done)).length;
     return {est, act, todo, done};
@@ -1631,13 +1670,16 @@
 
     let rightBlock = "";
     if (item.kind === "expense"){
+      const amounts = getExpenseAmounts(item);
       rightBlock = `
         <div class="muted" style="font-size:12px; text-align:right;">
-          <div class="mono">Est: ${money(item.est||0)} €</div>
-          <div class="mono">Act: ${money(item.act||0)} €</div>
+          <div class="mono">Est: ${money(amounts.est)} €</div>
+          <div class="mono">Act: ${money(amounts.act)} €</div>
+          ${toBool(item.per_m2) ? `<div class="mono">${money(amounts.area || 0)} m² x ${money(item.est||0)} / ${money(item.act||0)} €/m²</div>` : ""}
           <div style="margin-top:4px; display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
             <span class="pill">${escapeHtml(item.category || "other")}</span>
             <span class="pill">${escapeHtml(item.item_key || "(no key)")}</span>
+            ${toBool(item.per_m2) ? `<span class="pill accent">per m²</span>` : ""}
           </div>
         </div>
       `;
@@ -1686,25 +1728,27 @@
     allExpensesTbody.innerHTML = "";
     exp.forEach(e => {
       const r = getRoom(e.roomId);
+      const amounts = getExpenseAmounts(e);
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(r.name)}</td>
         <td class="mono">${escapeHtml(e.item_key || "")}</td>
         <td>
           <div style="font-weight:650;">${escapeHtml(e.name)}</div>
+          ${toBool(e.per_m2) ? `<div class="muted" style="margin-top:4px;">${money(amounts.area || 0)} m² x ${money(e.est||0)} / ${money(e.act||0)} €/m²</div>` : ""}
           ${e.notes ? `<div class="muted" style="margin-top:4px; white-space:pre-wrap;">${escapeHtml(e.notes)}</div>` : ""}
         </td>
         <td><span class="pill">${escapeHtml(e.category || "other")}</span></td>
-        <td class="right mono">${money(e.est || 0)}</td>
-        <td class="right mono">${money(e.act || 0)}</td>
+        <td class="right mono">${money(amounts.est)}</td>
+        <td class="right mono">${money(amounts.act)}</td>
         <td><span class="pill ${toBool(e.done) ? "ok":"bad"}">${toBool(e.done) ? "done":"todo"}</span></td>
         <td>${e.link ? `<a href="${escapeAttr(e.link)}" target="_blank" rel="noreferrer">link</a>` : `<span class="muted">—</span>`}</td>
       `;
       allExpensesTbody.appendChild(tr);
     });
 
-    const est = sum(exp.map(e => Number(e.est) || 0));
-    const act = sum(exp.map(e => Number(e.act) || 0));
+    const est = sum(exp.map(e => getExpenseAmounts(e).est));
+    const act = sum(exp.map(e => getExpenseAmounts(e).act));
     tfootEst.textContent = money(est);
     tfootAct.textContent = money(act);
   }
@@ -1722,8 +1766,8 @@
     catalogTbody.innerHTML = "";
     for (const k of keys){
       const lines = map.get(k);
-      const est = sum(lines.map(x => Number(x.est) || 0));
-      const act = sum(lines.map(x => Number(x.act) || 0));
+      const est = sum(lines.map(x => getExpenseAmounts(x).est));
+      const act = sum(lines.map(x => getExpenseAmounts(x).act));
       const rooms = Array.from(new Set(lines.map(x => getRoom(x.roomId).name))).sort((a,b)=>a.localeCompare(b));
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -1739,17 +1783,32 @@
 
   function populateRoomSelect(selectedId){
     dlgRoom.innerHTML = "";
-    state.rooms.forEach(r => {
+    const rooms = state.rooms;
+
+    if (!rooms.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No rooms available";
+      opt.selected = true;
+      dlgRoom.appendChild(opt);
+      return;
+    }
+
+    rooms.forEach(r => {
       const opt = document.createElement("option");
       opt.value = r.id;
       opt.textContent = r.name;
       if (r.id === selectedId) opt.selected = true;
       dlgRoom.appendChild(opt);
     });
+
+    if (!dlgRoom.value && rooms[0]) dlgRoom.value = rooms[0].id;
   }
   function updateExpenseFieldsVisibility(){
     const isExpense = dlgKind.value === "expense";
     expenseOnly.forEach(el => el.style.display = isExpense ? "" : "none");
+    if (!isExpense) dlgPerM2.checked = false;
+    updatePerM2Labels();
   }
   function openAddDialog(kind, roomId){
     editingItemId = null;
@@ -1763,6 +1822,7 @@
 
     dlgEst.value = "";
     dlgAct.value = "";
+    dlgPerM2.checked = false;
     dlgCategory.value = "materials";
     populateItemKeySelect("");
 
@@ -1786,6 +1846,7 @@
 
     dlgEst.value = item.est ?? "";
     dlgAct.value = item.act ?? "";
+    dlgPerM2.checked = toBool(item.per_m2);
     dlgCategory.value = item.category || "other";
     populateItemKeySelect(item.item_key || "");
 
